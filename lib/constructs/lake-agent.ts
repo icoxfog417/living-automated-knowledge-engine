@@ -20,7 +20,7 @@ export class LAKEAgent extends Construct {
 
     // Lambda function for metadata generation
     this.lambdaFunction = new lambda_python.PythonFunction(this, "Function", {
-      functionName: "lake-metadata-generator",
+      functionName: `lake-metadata-generator-${cdk.Names.uniqueId(this).slice(-8)}`,
       runtime: lambda.Runtime.PYTHON_3_12,
       entry: path.join(__dirname, "../../lambda/metadata-generator"),
       index: "src/handler.py",
@@ -40,7 +40,7 @@ export class LAKEAgent extends Construct {
 
     // EventBridge rule for S3 Object Created events
     this.eventRule = new events.Rule(this, "S3EventRule", {
-      ruleName: "lake-s3-object-created-rule",
+      ruleName: `lake-s3-object-created-rule-${cdk.Names.uniqueId(this).slice(-8)}`,
       description: "Trigger Lambda when objects are uploaded to S3 (excluding .metadata.json files)",
       eventPattern: {
         source: ["aws.s3"],
