@@ -4,6 +4,7 @@ import json
 from src.core.metadata_generator import MetadataGenerator
 from src.core.schema import FileInfo, Config, MetadataRule
 from src.clients.bedrock_client import BedrockClient
+from src.services.rule_matcher import RuleMatcher
 
 
 # テスト用の設定を直接定義
@@ -178,8 +179,11 @@ def test_metadata_generation_for_text_file():
         temperature=TEST_CONFIG.bedrock_temperature
     )
     
+    # RuleMatcher初期化
+    rule_matcher = RuleMatcher(TEST_CONFIG.rules)
+    
     # メタデータ生成器初期化
-    generator = MetadataGenerator(TEST_CONFIG, bedrock)
+    generator = MetadataGenerator(TEST_CONFIG, bedrock, rule_matcher)
     
     # テストデータ  
     file_info = FileInfo(
@@ -212,7 +216,10 @@ def test_metadata_generation_for_markdown():
         temperature=TEST_CONFIG.bedrock_temperature
     )
     
-    generator = MetadataGenerator(TEST_CONFIG, bedrock)
+    # RuleMatcher初期化
+    rule_matcher = RuleMatcher(TEST_CONFIG.rules)
+    
+    generator = MetadataGenerator(TEST_CONFIG, bedrock, rule_matcher)
     
     # テストデータ
     file_info = FileInfo(
