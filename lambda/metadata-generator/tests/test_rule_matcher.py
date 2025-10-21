@@ -1,6 +1,7 @@
 """Unit tests for RuleMatcher."""
-from src.services.rule_matcher import RuleMatcher
+
 from src.core.schema import MetadataRule
+from src.services.rule_matcher import RuleMatcher
 
 
 def test_match_root_level_files_with_globstar():
@@ -26,7 +27,7 @@ def test_match_with_directory_prefix():
     assert RuleMatcher.match_pattern("reports/nested/data.csv", "reports/**/*.csv")
     # Note: Very deeply nested paths may not match due to pathlib limitations
     # This is acceptable for the current use case
-    
+
     # Should not match
     assert not RuleMatcher.match_pattern("other/data.csv", "reports/**/*.csv")
     assert not RuleMatcher.match_pattern("data.csv", "reports/**/*.csv")
@@ -36,7 +37,7 @@ def test_match_simple_pattern():
     """Test simple patterns without globstar."""
     assert RuleMatcher.match_pattern("report.txt", "*.txt")
     assert RuleMatcher.match_pattern("data.csv", "*.csv")
-    
+
     # Note: pathlib.match() matches against any part of the path,
     # so nested files will also match. This is expected behavior.
 
@@ -64,9 +65,9 @@ def test_find_matching_rule_first_match():
         MetadataRule(pattern="**/*.txt", schema={"type": "text"}),
         MetadataRule(pattern="**/*.csv", schema={"type": "csv"}),
     ]
-    
+
     matcher = RuleMatcher(rules)
-    
+
     # Test matching
     rule = matcher.find_matching_rule("Bedrock_Wiki.md")
     assert rule is not None
@@ -81,19 +82,19 @@ def test_find_matching_rule_different_files():
         MetadataRule(pattern="**/*.txt", schema={"type": "text"}),
         MetadataRule(pattern="reports/**/*.csv", schema={"type": "csv"}),
     ]
-    
+
     matcher = RuleMatcher(rules)
-    
+
     # Test markdown
     rule = matcher.find_matching_rule("docs/guide.md")
     assert rule is not None
     assert rule.schema == {"type": "markdown"}
-    
+
     # Test text
     rule = matcher.find_matching_rule("notes.txt")
     assert rule is not None
     assert rule.schema == {"type": "text"}
-    
+
     # Test CSV with prefix
     rule = matcher.find_matching_rule("reports/data.csv")
     assert rule is not None
@@ -106,13 +107,13 @@ def test_find_matching_rule_returns_none_when_no_match():
         MetadataRule(pattern="**/*.md", schema={"type": "markdown"}),
         MetadataRule(pattern="**/*.txt", schema={"type": "text"}),
     ]
-    
+
     matcher = RuleMatcher(rules)
-    
+
     # Test no match
     rule = matcher.find_matching_rule("unknown.xyz")
     assert rule is None
-    
+
     rule = matcher.find_matching_rule("document.pdf")
     assert rule is None
 
@@ -123,9 +124,9 @@ def test_find_matching_rule_priority():
         MetadataRule(pattern="**/*.md", schema={"type": "markdown_general"}),
         MetadataRule(pattern="docs/**/*.md", schema={"type": "markdown_docs"}),
     ]
-    
+
     matcher = RuleMatcher(rules)
-    
+
     # Should match the first rule (more general)
     rule = matcher.find_matching_rule("docs/guide.md")
     assert rule is not None
@@ -135,7 +136,7 @@ def test_find_matching_rule_priority():
 def test_empty_rules_list():
     """Test behavior with empty rules list."""
     matcher = RuleMatcher([])
-    
+
     rule = matcher.find_matching_rule("any_file.txt")
     assert rule is None
 
@@ -145,9 +146,9 @@ def test_match_pattern_with_multiple_extensions():
     rules = [
         MetadataRule(pattern="**/*.{md,txt}", schema={"type": "text_like"}),
     ]
-    
+
     matcher = RuleMatcher(rules)
-    
+
     # Note: Python's pathlib doesn't support {md,txt} syntax
     # This test documents the current behavior
     assert not matcher.find_matching_rule("file.md")
@@ -159,13 +160,13 @@ def test_match_case_sensitivity():
     rules = [
         MetadataRule(pattern="**/*.MD", schema={"type": "markdown_upper"}),
     ]
-    
+
     matcher = RuleMatcher(rules)
-    
+
     # Should match exact case
     rule = matcher.find_matching_rule("README.MD")
     assert rule is not None
-    
+
     # Should not match different case
     rule = matcher.find_matching_rule("README.md")
     assert rule is None

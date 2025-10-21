@@ -1,11 +1,11 @@
 """Integration test for metadata generation."""
+
 import json
 
-from src.core.metadata_generator import MetadataGenerator
-from src.core.schema import FileInfo, Config, MetadataRule
 from src.clients.bedrock_client import BedrockClient
+from src.core.metadata_generator import MetadataGenerator
+from src.core.schema import Config, FileInfo, MetadataRule
 from src.services.rule_matcher import RuleMatcher
-
 
 # テスト用の設定を直接定義
 TEST_CONFIG = Config(
@@ -15,63 +15,51 @@ TEST_CONFIG = Config(
             schema={
                 "type": "object",
                 "properties": {
-                    "department": {
-                        "type": "string",
-                        "description": "department"
-                    },
+                    "department": {"type": "string", "description": "department"},
                     "document_type": {
                         "type": "string",
                         "enum": ["memo", "minutes", "manual", "others"],
-                        "description": "document type"
+                        "description": "document type",
                     },
                     "sensitivity_level": {
                         "type": "string",
                         "enum": ["public", "internal", "confidential", "restricted"],
-                        "description": "sensitivity level"
+                        "description": "sensitivity level",
                     },
-                    "keywords": {
-                        "type": "string",
-                        "description": "keywords (3-5 words)"
-                    }
+                    "keywords": {"type": "string", "description": "keywords (3-5 words)"},
                 },
-                "required": ["department", "document_type", "sensitivity_level", "keywords"]
-            }
+                "required": ["department", "document_type", "sensitivity_level", "keywords"],
+            },
         ),
         MetadataRule(
             pattern="**/*.md",
             schema={
                 "type": "object",
                 "properties": {
-                    "department": {
-                        "type": "string",
-                        "description": "department"
-                    },
+                    "department": {"type": "string", "description": "department"},
                     "document_type": {
                         "type": "string",
                         "enum": ["document", "README", "others"],
-                        "description": "document type"
+                        "description": "document type",
                     },
                     "sensitivity_level": {
                         "type": "string",
                         "enum": ["public", "internal", "confidential", "restricted"],
-                        "description": "sensitivity level"
+                        "description": "sensitivity level",
                     },
-                    "keywords": {
-                        "type": "string",
-                        "description": "keywords (3-5 words)"
-                    },
+                    "keywords": {"type": "string", "description": "keywords (3-5 words)"},
                     "summary": {
                         "type": "string",
-                        "description": "document's summary (max 100 words)"
-                    }
+                        "description": "document's summary (max 100 words)",
+                    },
                 },
-                "required": ["department", "document_type", "sensitivity_level", "keywords"]
-            }
-        )
+                "required": ["department", "document_type", "sensitivity_level", "keywords"],
+            },
+        ),
     ],
     bedrock_model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0",
     bedrock_max_tokens=2000,
-    bedrock_temperature=0.1
+    bedrock_temperature=0.1,
 )
 
 
@@ -172,40 +160,36 @@ CI/CDパイプラインによる自動デプロイを使用します。
 
 def test_metadata_generation_for_text_file():
     """Test metadata generation for a text file."""
-    
+
     bedrock = BedrockClient(
         model_id=TEST_CONFIG.bedrock_model_id,
         max_tokens=TEST_CONFIG.bedrock_max_tokens,
-        temperature=TEST_CONFIG.bedrock_temperature
+        temperature=TEST_CONFIG.bedrock_temperature,
     )
-    
+
     # RuleMatcher初期化
     rule_matcher = RuleMatcher(TEST_CONFIG.rules)
-    
+
     # メタデータ生成器初期化
     generator = MetadataGenerator(TEST_CONFIG, bedrock, rule_matcher)
-    
-    # テストデータ  
-    file_info = FileInfo(
-        bucket='test-bucket',
-        key='docs/report.txt',
-        content=SAMPLE_REPORT_TXT
-    )
-    
+
+    # テストデータ
+    file_info = FileInfo(bucket="test-bucket", key="docs/report.txt", content=SAMPLE_REPORT_TXT)
+
     # メタデータ生成
     result = generator.generate_metadata(file_info)
-    
+
     # 生成されたメタデータをログ出力
-    print(f"\n[Text File Test] Generated metadata:")
+    print("\n[Text File Test] Generated metadata:")
     print(json.dumps(result.metadata, ensure_ascii=False, indent=2))
-    
+
     # 検証
     assert result.metadata is not None, "Metadata should not be None"
-    assert result.file_key == 'docs/report.txt', "File key should match"
-    assert 'department' in result.metadata, "Should have department field"
-    assert 'document_type' in result.metadata, "Should have document_type field"
-    assert 'sensitivity_level' in result.metadata, "Should have sensitivity_level field"
-    assert 'keywords' in result.metadata, "Should have keywords field"
+    assert result.file_key == "docs/report.txt", "File key should match"
+    assert "department" in result.metadata, "Should have department field"
+    assert "document_type" in result.metadata, "Should have document_type field"
+    assert "sensitivity_level" in result.metadata, "Should have sensitivity_level field"
+    assert "keywords" in result.metadata, "Should have keywords field"
 
 
 def test_metadata_generation_for_markdown():
@@ -213,32 +197,28 @@ def test_metadata_generation_for_markdown():
     bedrock = BedrockClient(
         model_id=TEST_CONFIG.bedrock_model_id,
         max_tokens=TEST_CONFIG.bedrock_max_tokens,
-        temperature=TEST_CONFIG.bedrock_temperature
+        temperature=TEST_CONFIG.bedrock_temperature,
     )
-    
+
     # RuleMatcher初期化
     rule_matcher = RuleMatcher(TEST_CONFIG.rules)
-    
+
     generator = MetadataGenerator(TEST_CONFIG, bedrock, rule_matcher)
-    
+
     # テストデータ
-    file_info = FileInfo(
-        bucket='test-bucket',
-        key='docs/guide.md',
-        content=SAMPLE_DOCUMENT_MD
-    )
-    
+    file_info = FileInfo(bucket="test-bucket", key="docs/guide.md", content=SAMPLE_DOCUMENT_MD)
+
     result = generator.generate_metadata(file_info)
-    
+
     # 生成されたメタデータをログ出力
-    print(f"\n[Markdown File Test] Generated metadata:")
+    print("\n[Markdown File Test] Generated metadata:")
     print(json.dumps(result.metadata, ensure_ascii=False, indent=2))
-    
+
     # 検証
     assert result.metadata is not None, "Metadata should not be None"
-    assert result.file_key == 'docs/guide.md', "File key should match"
-    assert 'department' in result.metadata, "Should have department field"
-    assert 'document_type' in result.metadata, "Should have document_type field"
-    assert 'sensitivity_level' in result.metadata, "Should have sensitivity_level field"
-    assert 'keywords' in result.metadata, "Should have keywords field"
-    assert 'summary' in result.metadata, "Should have summary field"
+    assert result.file_key == "docs/guide.md", "File key should match"
+    assert "department" in result.metadata, "Should have department field"
+    assert "document_type" in result.metadata, "Should have document_type field"
+    assert "sensitivity_level" in result.metadata, "Should have sensitivity_level field"
+    assert "keywords" in result.metadata, "Should have keywords field"
+    assert "summary" in result.metadata, "Should have summary field"
