@@ -69,8 +69,13 @@ class S3Operations:
             Exception: If metadata cannot be written to S3
         """
         try:
+            # Wrap metadata with metadataAttributes field
+            wrapped_metadata = {
+                "metadataAttributes": metadata.metadata
+            }
+            
             metadata_json = json.dumps(
-                metadata.metadata,
+                wrapped_metadata,
                 ensure_ascii=False,
                 indent=2
             )

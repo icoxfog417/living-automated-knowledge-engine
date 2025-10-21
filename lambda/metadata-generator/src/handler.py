@@ -45,18 +45,6 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Initialize S3 operations
         s3_ops = S3Operations()
         
-        # Check if metadata already exists
-        if s3_ops.metadata_exists(bucket, key):
-            logger.info(f"Metadata already exists for {key}, skipping generation")
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'Metadata already exists',
-                    'file': key,
-                    'skipped': True
-                })
-            }
-        
         # Read file content from S3
         file_data = s3_ops.read_file(bucket, key)
         

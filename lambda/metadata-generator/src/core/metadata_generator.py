@@ -1,6 +1,6 @@
 """Core metadata generation logic."""
 import json
-import fnmatch
+from pathlib import PurePosixPath
 from typing import Optional
 from jsonschema import validate, ValidationError
 
@@ -65,11 +65,47 @@ class MetadataGenerator:
             Matching MetadataRule or None
         """
         for rule in self.config.rules:
-            # Use fnmatch for glob pattern matching
-            if fnmatch.fnmatch(file_key, rule.pattern):
+            if self._match_pattern(file_key, rule.pattern):
                 return rule
         
         return None
+    
+    def _match_pattern(self, file_key: str, pattern: str) -> bool:
+        """
+        Match a file key against a glob pattern.
+        
+        This method handles both root-level and nested files correctly,
+        including patterns with ** (globstar).
+        
+        Args:
+            file_key: S3 object key to match
+            pattern: Glob pattern (e.g., "**/*.md", "reports/**/*.csv")
+            
+        Returns:
+            True if the file key matches the pattern, False otherwise
+        """
+        # Use PurePosixPath for consistent path handling (S3 uses forward slashes)
+        path = PurePosixPath(file_key)
+        
+        # Try direct match first
+        if path.match(pattern):
+            return True
+        
+        # For patterns starting with **, also try without the **/ prefix
+        # This handles root-level files like "file.md" matching "**/*.md"
+        if pattern.startswith('**/'):
+            simple_pattern = pattern[3:]  # Remove "**/" prefix
+            if path.match(simple_pattern):
+                return True
+        
+        # For patterns with **/ in the middle (e.g., "reports/**/*.csv")
+        # Try removing **/ entirely to match direct children
+        if '/**/' in pattern:
+            simple_pattern = pattern.replace('/**/', '/')
+            if path.match(simple_pattern):
+                return True
+        
+        return False
     
     def _build_prompt(self, file_info: FileInfo, schema: dict) -> str:
         """
