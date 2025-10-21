@@ -1,0 +1,1 @@
+# metadata-generator Lambda package
