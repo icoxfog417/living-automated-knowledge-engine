@@ -36,12 +36,6 @@ export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
       targetBucket
     });
 
-    // Outputs
-    new cdk.CfnOutput(this, "TargetBucketName", {
-      value: targetBucket.bucketName,
-      description: "S3 Bucket for data storage",
-    });
-
     new cdk.CfnOutput(this, "LAKEAgentFunctionArn", {
       value: lakeAgent.lambdaFunction.functionArn,
       description: "Lambda function ARN for metadata generation",

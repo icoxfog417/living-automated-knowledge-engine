@@ -18,7 +18,7 @@
   },
   "context": {
     "lake": {
-      "existingBucketName": null
+      "existingBucketName": "lake-data-261737251930-us-east-1"
     },
     "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": true,
     "@aws-cdk/aws-ecs-patterns:secGroupsDisablesImplicitOpenListener": true,

@@ -4,6 +4,8 @@ import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as lambda_python from "@aws-cdk/aws-lambda-python-alpha";
 import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
+import * as iam from "aws-cdk-lib/aws-iam";
+import * as logs from "aws-cdk-lib/aws-logs";
 import { Construct } from "constructs";
 import * as path from "path";
 
@@ -18,8 +20,15 @@ export class LAKEAgent extends Construct {
   constructor(scope: Construct, id: string, props: LAKEAgentProps) {
     super(scope, id);
 
+    // Create log group with proper removal policy
+    const logGroup = new logs.LogGroup(this, "MetadataGeneratorFunctionLog", {
+      logGroupName: `/aws/lambda/lake-metadata-generator-${cdk.Names.uniqueId(this).slice(-8)}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // Lambda function for metadata generation
-    this.lambdaFunction = new lambda_python.PythonFunction(this, "Function", {
+    this.lambdaFunction = new lambda_python.PythonFunction(this, "MetadataGeneratorFunction", {
       functionName: `lake-metadata-generator-${cdk.Names.uniqueId(this).slice(-8)}`,
       runtime: lambda.Runtime.PYTHON_3_12,
       entry: path.join(__dirname, "../../lambda/metadata-generator"),
@@ -30,6 +39,7 @@ export class LAKEAgent extends Construct {
       },
       timeout: cdk.Duration.seconds(60),
       memorySize: 256,
+      logGroup: logGroup,
       environment: {
         BUCKET_NAME: props.targetBucket.bucketName,
       },
@@ -38,8 +48,17 @@ export class LAKEAgent extends Construct {
     // Grant S3 read/write permissions to Lambda
     props.targetBucket.grantReadWrite(this.lambdaFunction);
 
+    // Grant Bedrock permissions to Lambda
+    this.lambdaFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock:InvokeModel"],
+        resources: ["*"],
+      })
+    );
+
     // EventBridge rule for S3 Object Created events
-    this.eventRule = new events.Rule(this, "S3EventRule", {
+    this.eventRule = new events.Rule(this, "S3ObjectCreatedRule", {
       ruleName: `lake-s3-object-created-rule-${cdk.Names.uniqueId(this).slice(-8)}`,
       description: "Trigger Lambda when objects are uploaded to S3 (excluding .metadata.json files)",
       eventPattern: {
