@@ -1,0 +1,142 @@
+# Metadata Generation Rules Configuration
+
+rules:
+  file_patterns:
+    # PDF documents
+    - pattern: "/**/*.pdf"
+      schema:
+        type: "object"
+        properties:
+          department:
+            type: "string"
+            description: "部署名（例: 営業部、技術部、人事部）"
+          document_type:
+            type: "string"
+            enum: ["契約書", "報告書", "提案書", "マニュアル", "その他"]
+            description: "文書の種類"
+          sensitivity_level:
+            type: "string"
+            enum: ["public", "internal", "confidential", "restricted"]
+            description: "機密レベル"
+          author:
+            type: "string"
+            description: "作成者名"
+          creation_date:
+            type: "string"
+            format: "date"
+            description: "作成日（YYYY-MM-DD形式）"
+          summary:
+            type: "string"
+            description: "文書の要約（100文字程度）"
+        required: ["department", "document_type", "sensitivity_level"]
+
+    # CSV/Excel files in reports directory
+    - pattern: "reports/**/*.csv"
+      schema:
+        type: "object"
+        properties:
+          department:
+            type: "string"
+            description: "部署名"
+          document_type:
+            type: "string"
+            const: "tabular_data"
+          sensitivity_level:
+            type: "string"
+            enum: ["public", "internal", "confidential", "restricted"]
+            description: "機密レベル"
+          data_period:
+            type: "string"
+            description: "データの対象期間（例: 2024年1月、2024Q1）"
+          columns_summary:
+            type: "string"
+            description: "主要な列の説明"
+          record_count:
+            type: "integer"
+            description: "おおよそのレコード数"
+        required:
+          ["department", "document_type", "sensitivity_level", "data_period"]
+
+    - pattern: "reports/**/*.xlsx"
+      schema:
+        type: "object"
+        properties:
+          department:
+            type: "string"
+            description: "部署名"
+          document_type:
+            type: "string"
+            const: "tabular_data"
+          sensitivity_level:
+            type: "string"
+            enum: ["public", "internal", "confidential", "restricted"]
+            description: "機密レベル"
+          data_period:
+            type: "string"
+            description: "データの対象期間（例: 2024年1月、2024Q1）"
+          columns_summary:
+            type: "string"
+            description: "主要な列の説明"
+        required:
+          ["department", "document_type", "sensitivity_level", "data_period"]
+
+    # Text files
+    - pattern: "/**/*.txt"
+      schema:
+        type: "object"
+        properties:
+          department:
+            type: "string"
+            description: "部署名"
+          document_type:
+            type: "string"
+            enum: ["メモ", "議事録", "マニュアル", "その他"]
+            description: "文書の種類"
+          sensitivity_level:
+            type: "string"
+            enum: ["public", "internal", "confidential", "restricted"]
+            description: "機密レベル"
+          keywords:
+            type: "array"
+            items:
+              type: "string"
+            description: "文書の主要なキーワード（3-5個）"
+            minItems: 3
+            maxItems: 5
+        required:
+          ["department", "document_type", "sensitivity_level", "keywords"]
+
+    # Markdown files
+    - pattern: "/**/*.md"
+      schema:
+        type: "object"
+        properties:
+          department:
+            type: "string"
+            description: "部署名"
+          document_type:
+            type: "string"
+            enum: ["ドキュメント", "マニュアル", "README", "その他"]
+            description: "文書の種類"
+          sensitivity_level:
+            type: "string"
+            enum: ["public", "internal", "confidential", "restricted"]
+            description: "機密レベル"
+          keywords:
+            type: "array"
+            items:
+              type: "string"
+            description: "文書の主要なキーワード（3-5個）"
+            minItems: 3
+            maxItems: 5
+          summary:
+            type: "string"
+            description: "文書の要約（100文字程度）"
+        required:
+          ["department", "document_type", "sensitivity_level", "keywords"]
+
+# Bedrock Configuration
+bedrock:
+  model_id: "anthropic.claude-3-sonnet-20240229-v1:0"
+  max_tokens: 2000
+  temperature: 0.1

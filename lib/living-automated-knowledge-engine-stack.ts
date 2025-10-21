@@ -46,6 +46,17 @@ export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
     // Grant S3 read/write permissions to Lambda
     dataBucket.grantReadWrite(metadataGeneratorFunction);
 
+    // Grant Bedrock permissions to Lambda
+    metadataGeneratorFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock:InvokeModel"],
+        resources: [
+          `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
+        ],
+      })
+    );
+
     // EventBridge Rule for S3 Object Created events
     const s3EventRule = new events.Rule(this, "S3ObjectCreatedRule", {
       ruleName: "lake-s3-object-created-rule",
