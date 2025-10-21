@@ -1,0 +1,82 @@
+{
+  "name": "developer",
+  "description": "Developer Agent",
+  "mcpServers": {
+    "AWS Core MCP Server": {
+      "command": "uvx",
+      "timeout": 60000,
+      "args": [
+        "awslabs.core-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      }
+    },
+    "AWS Documentation MCP Server": {
+      "command": "uvx",
+      "timeout": 60000,
+      "args": [
+        "awslabs.aws-documentation-mcp-server@latest"
+      ],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR",
+        "AWS_DOCUMENTATION_PARTITION": "aws"
+      }
+    },
+    "awslabs.amazon-bedrock-agentcore-mcp-server": {
+      "command": "uvx",
+      "args": ["awslabs.amazon-bedrock-agentcore-mcp-server@latest"],
+      "env": {
+        "FASTMCP_LOG_LEVEL": "ERROR"
+      },
+      "disabled": false,
+      "autoApprove": []
+    },
+    "strands": {
+      "command": "uvx",
+      "args": ["strands-agents-mcp-server"]
+    },
+    "aws-knowledge-mcp-server": {
+      "command": "npx",
+      "args": [
+          "mcp-remote",
+          "https://knowledge-mcp.global.api.aws"
+      ]
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"]
+    }
+  },
+  "tools": [
+	"*"
+  ],
+  "allowedTools": [
+    "fs_read",
+    "fsReplace",
+    "listDirectory",
+    "fileSearch"
+  ],
+  "toolsSettings": {
+    "execute_bash": {
+      "alwaysAllow": [
+        {
+          "preset": "readOnly"
+        }
+      ]
+    },
+    "use_aws": {
+      "alwaysAllow": [
+        {
+          "preset": "readOnly"
+        }
+      ]
+    }
+  },
+  "resources": [
+    "file://.amazonq/rules/principles.md",
+    "file://.amazonq/rules/project.md",
+    "file://spec/requirements.md",
+    "file://spec/design.md"
+  ]
+}
