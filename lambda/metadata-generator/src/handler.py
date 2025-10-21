@@ -7,10 +7,45 @@ from .core.config_loader import ConfigLoader
 from .core.metadata_generator import MetadataGenerator
 from .clients.bedrock_client import BedrockClient
 from .clients.s3_operations import S3Operations
+from .services.rule_matcher import RuleMatcher
+from .services.event_parser import EventParser
 
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+try:
+    # Load configuration
+    config = ConfigLoader.load_from_module()
+    
+    # Log loaded configuration
+    config_dict = {
+        'bedrock_model_id': config.bedrock_model_id,
+        'bedrock_max_tokens': config.bedrock_max_tokens,
+        'bedrock_temperature': config.bedrock_temperature,
+        'rules': [
+            {
+                'pattern': rule.pattern,
+                'schema': rule.schema
+            }
+            for rule in config.rules
+        ]
+    }
+    logger.info(f"Loaded configuration: {json.dumps(config_dict, ensure_ascii=False, indent=2)}")
+    
+    # Initialize clients and services
+    s3_ops = S3Operations()
+    bedrock_client = BedrockClient(
+        model_id=config.bedrock_model_id,
+        max_tokens=config.bedrock_max_tokens,
+        temperature=config.bedrock_temperature
+    )
+    rule_matcher = RuleMatcher(config.rules)
+    generator = MetadataGenerator(config, bedrock_client, rule_matcher)
+    
+except Exception as e:
+    logger.error(f"Failed to initialize Lambda components: {str(e)}", exc_info=True)
+    raise
 
 
 def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -27,8 +62,8 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         logger.info(f"Processing event: {json.dumps(event)}")
         
-        # Extract file information from EventBridge event
-        file_info = extract_file_info_from_event(event)
+        # Extract file information from EventBridge event (delegated to EventParser)
+        file_info = EventParser.extract_file_info(event)
         
         if not file_info:
             logger.warning("No file information found in event")
@@ -42,28 +77,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         logger.info(f"Processing file: s3://{bucket}/{key}")
         
-        # Initialize S3 operations
-        s3_ops = S3Operations()
-        
-        # Read file content from S3
+        # Read file content from S3 (using pre-initialized client)
         file_data = s3_ops.read_file(bucket, key)
         
-        # Load configuration
-        config = ConfigLoader.load_from_module()
-        
-        # Initialize Bedrock client
-        bedrock_client = BedrockClient(
-            model_id=config.bedrock_model_id,
-            max_tokens=config.bedrock_max_tokens,
-            temperature=config.bedrock_temperature
-        )
-        
-        # Initialize metadata generator
-        generator = MetadataGenerator(config, bedrock_client)
-        
-        # Generate metadata
+        # Generate metadata (using pre-initialized generator)
         logger.info(f"Generating metadata for {key}")
         metadata = generator.generate_metadata(file_data)
+        
+        # Log generated metadata
+        logger.info(f"Generated metadata: {json.dumps(metadata.metadata, ensure_ascii=False, indent=2)}")
         
         # Save metadata to S3
         s3_ops.write_metadata(bucket, metadata)
@@ -89,47 +111,3 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'message': 'Failed to generate metadata'
             })
         }
-
-
-def extract_file_info_from_event(event: Dict[str, Any]) -> Dict[str, str]:
-    """
-    Extract file information from EventBridge S3 event.
-    
-    Args:
-        event: EventBridge event dictionary
-        
-    Returns:
-        Dictionary with 'bucket' and 'key' or None if invalid
-    """
-    try:
-        # EventBridge format for S3 events
-        if 'detail' in event:
-            detail = event['detail']
-            
-            # Extract bucket name
-            bucket_info = detail.get('bucket', {})
-            bucket = bucket_info.get('name')
-            
-            # Extract object key
-            object_info = detail.get('object', {})
-            key = object_info.get('key')
-            
-            if bucket and key:
-                return {
-                    'bucket': bucket,
-                    'key': key
-                }
-        
-        # Direct invocation format (for testing)
-        if 'bucket' in event and 'key' in event:
-            return {
-                'bucket': event['bucket'],
-                'key': event['key']
-            }
-        
-        logger.warning(f"Could not extract file info from event: {json.dumps(event)}")
-        return None
-        
-    except Exception as e:
-        logger.error(f"Error extracting file info: {str(e)}")
-        return None

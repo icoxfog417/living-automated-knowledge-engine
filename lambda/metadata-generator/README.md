@@ -138,6 +138,129 @@ rules:
         required: ["custom_field"]
 ```
 
+## パターンマッチングの制約と注意事項
+
+本システムは Python の `pathlib.PurePosixPath.match()` を使用してファイルパターンマッチングを行います。この動作には以下の特徴と制約があります。
+
+### 1. 部分マッチの動作
+
+**重要**: パターンはパスの**末尾部分**とマッチします。
+
+```yaml
+# この設定の場合...
+- pattern: "*.txt"
+  schema: ...
+# 以下のすべてにマッチします：
+# ✓ report.txt          （ルートレベル）
+# ✓ docs/report.txt     （1階層下）
+# ✓ deep/path/file.txt  （深い階層）
+```
+
+```yaml
+# この設定の場合...
+- pattern: "README.md"
+  schema: ...
+# 以下のすべてにマッチします：
+# ✓ README.md           （ルートレベル）
+# ✓ docs/README.md      （サブディレクトリ内）
+```
+
+### 2. 推奨されるパターン記法
+
+より明確で予測可能な動作のために、`**` を明示的に使用することを推奨します：
+
+```yaml
+rules:
+  file_patterns:
+    # ✓ 推奨: すべての階層を明示的に指定
+    - pattern: "**/*.txt"
+      schema: ...
+
+    # ✓ 推奨: 特定ディレクトリ配下を明示
+    - pattern: "reports/**/*.csv"
+      schema: ...
+
+    # ✓ 推奨: 特定ディレクトリ直下のみ
+    - pattern: "docs/*.md"
+      schema: ...
+      # 注意: これも "deep/docs/file.md" にマッチします
+
+    # ⚠️ 注意: 意図しないマッチが起こる可能性
+    - pattern: "*.txt"
+      schema: ...
+      # すべての階層の .txt ファイルにマッチ
+```
+
+### 3. 深いネスト構造の制限
+
+非常に深い階層（4 階層以上）では、パターンマッチングが不安定になる場合があります：
+
+```yaml
+# この設定で...
+- pattern: "reports/**/*.csv"
+  schema: ...
+# マッチする例：
+# ✓ reports/data.csv
+# ✓ reports/2024/data.csv
+# ✓ reports/2024/Q1/data.csv
+
+# マッチしない可能性がある例：
+# ? reports/very/deep/nested/path/data.csv  （4階層以上）
+```
+
+**対処法**: 通常の使用では問題ありませんが、極端に深い階層構造が予想される場合は、より一般的なパターン `**/*.csv` の使用を検討してください。
+
+### 4. 複数拡張子の記法は非サポート
+
+Bash スタイルの `{md,txt}` のようなブレース展開は使用できません：
+
+```yaml
+# ❌ 動作しません
+- pattern: "**/*.{md,txt}"
+  schema: ...
+
+# ✓ 正しい方法: 個別のルールとして定義
+- pattern: "**/*.md"
+  schema:
+    type: "object"
+    properties:
+      title: { type: "string" }
+    required: ["title"]
+
+- pattern: "**/*.txt"
+  schema:
+    type: "object"
+    properties:
+      title: { type: "string" }
+    required: ["title"]
+```
+
+### 5. ルールの優先順位
+
+複数のルールがマッチする場合、**最初にマッチしたルール**が適用されます：
+
+```yaml
+rules:
+  file_patterns:
+    # この順序が重要
+    - pattern: "docs/**/*.md" # より具体的なルール
+      schema: { ... } # ← docs 配下はこちらが適用される
+
+    - pattern: "**/*.md" # より一般的なルール
+      schema: { ... } # ← それ以外はこちらが適用される
+```
+
+### パターンマッチングのテスト
+
+設定を変更した場合は、以下のコマンドでパターンマッチングのテストを実行できます：
+
+```bash
+cd lambda/metadata-generator
+pytest tests/test_rule_matcher.py tests/test_pattern_matching.py -v
+```
+
+これらのテストには、実際の動作例と期待される結果が含まれています。
+
 ## 依存関係
 
 ```toml

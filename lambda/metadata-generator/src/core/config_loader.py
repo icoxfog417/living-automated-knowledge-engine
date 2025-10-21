@@ -55,7 +55,7 @@ class ConfigLoader:
         
         return Config(
             rules=rules,
-            bedrock_model_id=bedrock_config.get('model_id', 'anthropic.claude-3-sonnet-20240229-v1:0'),
+            bedrock_model_id=bedrock_config.get('model_id', "global.anthropic.claude-haiku-4-5-20251001-v1:0"),
             bedrock_max_tokens=bedrock_config.get('max_tokens', 2000),
             bedrock_temperature=bedrock_config.get('temperature', 0.1)
         )
