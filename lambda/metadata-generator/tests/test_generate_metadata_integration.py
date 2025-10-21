@@ -27,7 +27,11 @@ TEST_CONFIG = Config(
                         "type": "string",
                         "enum": ["public", "internal", "confidential", "restricted"],
                         "description": "sensitivity level"
-                    },                    
+                    },
+                    "keywords": {
+                        "type": "string",
+                        "description": "keywords (3-5 words)"
+                    }
                 },
                 "required": ["department", "document_type", "sensitivity_level", "keywords"]
             }
@@ -46,20 +50,25 @@ TEST_CONFIG = Config(
                         "enum": ["document", "README", "others"],
                         "description": "document type"
                     },
+                    "sensitivity_level": {
+                        "type": "string",
+                        "enum": ["public", "internal", "confidential", "restricted"],
+                        "description": "sensitivity level"
+                    },
                     "keywords": {
                         "type": "string",
-                        "description": "keywords（3-5 words）",
+                        "description": "keywords (3-5 words)"
                     },
                     "summary": {
                         "type": "string",
-                        "description": "document's summary (-100 words)"
+                        "description": "document's summary (max 100 words)"
                     }
                 },
                 "required": ["department", "document_type", "sensitivity_level", "keywords"]
             }
         )
     ],
-    bedrock_model_id="anthropic.claude-3-sonnet-20240229-v1:0",
+    bedrock_model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0",
     bedrock_max_tokens=2000,
     bedrock_temperature=0.1
 )
@@ -181,10 +190,18 @@ def test_metadata_generation_for_text_file():
     
     # メタデータ生成
     result = generator.generate_metadata(file_info)
-    print(result)
+    
+    # 生成されたメタデータをログ出力
+    print(f"\n[Text File Test] Generated metadata:")
+    print(json.dumps(result.metadata, ensure_ascii=False, indent=2))
     
     # 検証
     assert result.metadata is not None, "Metadata should not be None"
+    assert result.file_key == 'docs/report.txt', "File key should match"
+    assert 'department' in result.metadata, "Should have department field"
+    assert 'document_type' in result.metadata, "Should have document_type field"
+    assert 'sensitivity_level' in result.metadata, "Should have sensitivity_level field"
+    assert 'keywords' in result.metadata, "Should have keywords field"
 
 
 def test_metadata_generation_for_markdown():
@@ -205,51 +222,16 @@ def test_metadata_generation_for_markdown():
     )
     
     result = generator.generate_metadata(file_info)
-    print(result)
+    
+    # 生成されたメタデータをログ出力
+    print(f"\n[Markdown File Test] Generated metadata:")
+    print(json.dumps(result.metadata, ensure_ascii=False, indent=2))
     
     # 検証
     assert result.metadata is not None, "Metadata should not be None"
-
-
-if __name__ == '__main__':    
-    results = []
-    errors = []
-    
-    # Test 1: Text file
-    try:
-        result1 = test_metadata_generation_for_text_file()
-        results.append(("Text file test", result1))
-    except Exception as e:
-        print(f"\n❌ Text file test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        errors.append(("Text file test", e))
-    
-    # Test 2: Markdown file
-    try:
-        result2 = test_metadata_generation_for_markdown()
-        results.append(("Markdown file test", result2))
-    except Exception as e:
-        print(f"\n❌ Markdown file test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        errors.append(("Markdown file test", e))
-    
-    # Summary
-    print("\n" + "="*70)
-    print("Test Summary")
-    print("="*70)
-    print(f"\n✅ Passed: {len(results)}")
-    print(f"❌ Failed: {len(errors)}")
-    
-    if errors:
-        print("\n❌ Failed tests:")
-        for name, error in errors:
-            print(f"   - {name}: {error}")
-    
-    if len(results) == 2 and len(errors) == 0:
-        print("\n🎉 All tests passed successfully!")
-        print("\nGenerated metadata can now be used with Amazon Bedrock Knowledge Bases.")
-    else:
-        print("\n⚠️  Some tests failed. Please check the errors above.")
-        sys.exit(1)
+    assert result.file_key == 'docs/guide.md', "File key should match"
+    assert 'department' in result.metadata, "Should have department field"
+    assert 'document_type' in result.metadata, "Should have document_type field"
+    assert 'sensitivity_level' in result.metadata, "Should have sensitivity_level field"
+    assert 'keywords' in result.metadata, "Should have keywords field"
+    assert 'summary' in result.metadata, "Should have summary field"

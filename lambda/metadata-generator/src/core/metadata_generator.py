@@ -43,8 +43,8 @@ class MetadataGenerator:
         # Build prompt from JSON Schema
         prompt = self._build_prompt(file_info, rule.schema)
         
-        # Generate metadata using Bedrock
-        raw_metadata = self.bedrock_client.generate_metadata(prompt)
+        # Generate metadata using Bedrock with structured output
+        raw_metadata = self.bedrock_client.generate_metadata(prompt, json_schema=rule.schema)
         
         # Validate against JSON Schema
         validated_metadata = self._validate_metadata(raw_metadata, rule.schema)

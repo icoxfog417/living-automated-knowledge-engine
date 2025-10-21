@@ -51,9 +51,7 @@ export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
       new iam.PolicyStatement({
         effect: iam.Effect.ALLOW,
         actions: ["bedrock:InvokeModel"],
-        resources: [
-          `arn:aws:bedrock:${this.region}::foundation-model/anthropic.claude-3-sonnet-20240229-v1:0`,
-        ],
+        resources: ["*"],
       })
     );
 

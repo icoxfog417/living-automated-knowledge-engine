@@ -1,7 +1,7 @@
 """Bedrock client for metadata generation using AI models."""
 import json
 import boto3
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 
 class BedrockClient:
@@ -28,12 +28,113 @@ class BedrockClient:
         self.temperature = temperature
         self.bedrock_client = bedrock_client or boto3.client('bedrock-runtime')
     
-    def generate_metadata(self, prompt: str) -> Dict[str, Any]:
+    def generate_structured_json(
+        self, 
+        prompt: str, 
+        json_schema: Dict[str, Any],
+        tool_name: str = "generate_structured_data",
+        tool_description: str = "Generate structured data according to the provided schema"
+    ) -> Dict[str, Any]:
+        """
+        Generate structured JSON using Bedrock Converse API with tool use.
+        
+        This method uses the Converse API's tool use feature to ensure the model
+        returns data strictly conforming to the provided JSON Schema.
+        
+        Args:
+            prompt: Prompt describing what data to generate
+            json_schema: JSON Schema defining the structure of the output
+            tool_name: Name of the tool (default: "generate_structured_data")
+            tool_description: Description of what the tool does
+            
+        Returns:
+            Generated data as dictionary conforming to the schema
+            
+        Raises:
+            Exception: If generation fails or no tool use is returned
+        """
+        try:
+            # Prepare tool configuration
+            tool_config = {
+                "tools": [
+                    {
+                        "toolSpec": {
+                            "name": tool_name,
+                            "description": tool_description,
+                            "inputSchema": {
+                                "json": json_schema
+                            }
+                        }
+                    }
+                ],
+                "toolChoice": {
+                    "tool": {
+                        "name": tool_name
+                    }
+                }
+            }
+            
+            # Call Converse API
+            response = self.bedrock_client.converse(
+                modelId=self.model_id,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ],
+                toolConfig=tool_config,
+                inferenceConfig={
+                    "maxTokens": self.max_tokens,
+                    "temperature": self.temperature
+                }
+            )
+            
+            # Extract tool use from response
+            if 'output' not in response:
+                raise ValueError("No output in Bedrock response")
+            
+            output = response['output']
+            if 'message' not in output:
+                raise ValueError("No message in Bedrock output")
+            
+            message = output['message']
+            if 'content' not in message:
+                raise ValueError("No content in Bedrock message")
+            
+            # Find tool use in content
+            tool_use = None
+            for content_block in message['content']:
+                if 'toolUse' in content_block:
+                    tool_use = content_block['toolUse']
+                    break
+            
+            if not tool_use:
+                raise ValueError("No tool use found in response")
+            
+            # Extract the structured input from tool use
+            if 'input' not in tool_use:
+                raise ValueError("No input in tool use")
+            
+            return tool_use['input']
+            
+        except Exception as e:
+            raise Exception(f"Failed to generate structured JSON with Bedrock: {str(e)}")
+    
+    def generate_metadata(self, prompt: str, json_schema: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Generate metadata using Bedrock model.
         
+        If json_schema is provided, uses Converse API with tool use for structured output.
+        Otherwise, falls back to the legacy invoke_model approach.
+        
         Args:
             prompt: Prompt for metadata generation
+            json_schema: Optional JSON Schema for structured output
             
         Returns:
             Generated metadata as dictionary
@@ -41,10 +142,19 @@ class BedrockClient:
         Raises:
             Exception: If generation fails or response is invalid
         """
+        # Use structured generation if schema is provided
+        if json_schema:
+            return self.generate_structured_json(
+                prompt=prompt,
+                json_schema=json_schema,
+                tool_name="generate_metadata",
+                tool_description="Generate metadata for a file according to the specified schema"
+            )
+        
+        # Legacy approach using invoke_model
         try:
             # Prepare request body for Claude 3
             request_body = {
-                "anthropic_version": "bedrock-2023-05-31",
                 "max_tokens": self.max_tokens,
                 "temperature": self.temperature,
                 "messages": [
