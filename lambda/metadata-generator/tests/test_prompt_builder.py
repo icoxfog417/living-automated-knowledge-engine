@@ -1,5 +1,7 @@
 """Unit tests for PromptBuilder."""
 
+import pytest
+
 from src.core.schema import FileInfo
 from src.services.prompt_builder import PromptBuilder
 
@@ -239,3 +241,97 @@ def test_build_prompt_with_unicode_content():
     assert "日本語ファイル.txt" in prompt
     assert "これは日本語のコンテンツです" in prompt
     assert "ドキュメントのタイトル" in prompt
+
+
+def test_calculate_max_content_chars():
+    """Test max content chars calculation with default parameters."""
+    # Claude Haiku 4.5の場合 (200,000 tokens)
+    max_chars = PromptBuilder.calculate_max_content_chars(input_context_window=200000)
+
+    # (200000 - 3000) * 0.8 * 3 = 472,800
+    assert max_chars == 472800
+
+
+def test_calculate_max_content_chars_with_custom_params():
+    """Test max content chars calculation with custom parameters."""
+    max_chars = PromptBuilder.calculate_max_content_chars(
+        input_context_window=100000,
+        prompt_overhead_tokens=5000,
+        safety_margin=0.7,
+        chars_per_token=4,
+    )
+
+    # (100000 - 5000) * 0.7 * 4 = 266,000
+    assert max_chars == 266000
+
+
+def test_calculate_max_content_chars_minimum():
+    """Test minimum value guarantee."""
+    # Very small input context window
+    max_chars = PromptBuilder.calculate_max_content_chars(input_context_window=1000)
+
+    # Minimum value of 3000 should be guaranteed
+    assert max_chars == 3000
+
+
+def test_calculate_max_content_chars_edge_cases():
+    """Test edge cases for max content chars calculation."""
+    # When overhead is larger than input window
+    max_chars = PromptBuilder.calculate_max_content_chars(
+        input_context_window=2000, prompt_overhead_tokens=5000
+    )
+    # Should still return minimum 3000
+    assert max_chars == 3000
+
+    # Very large input context window
+    max_chars = PromptBuilder.calculate_max_content_chars(input_context_window=1000000)
+    # (1000000 - 3000) * 0.8 * 3 = 2,392,800
+    assert max_chars == 2392800
+
+
+def test_build_metadata_prompt_with_custom_max_chars():
+    """Test prompt building with custom max content characters."""
+    file_info = FileInfo(
+        bucket="test-bucket", key="test.txt", content="a" * 10000  # 10000 characters
+    )
+
+    schema = {"type": "object", "properties": {"title": {"type": "string"}}}
+
+    # Set max_content_chars to 5000
+    prompt = PromptBuilder.build_metadata_prompt(file_info, schema, max_content_chars=5000)
+
+    # Should include 5000 'a's and truncation message
+    assert "a" * 5000 in prompt
+    assert "(truncated)" in prompt
+    # Should not include all 10000 characters
+    assert "a" * 10000 not in prompt
+
+
+def test_build_metadata_prompt_respects_max_chars_no_truncation():
+    """Test that prompt respects max_content_chars when content is shorter."""
+    file_info = FileInfo(bucket="test-bucket", key="test.txt", content="Short content")
+
+    schema = {"type": "object", "properties": {"title": {"type": "string"}}}
+
+    prompt = PromptBuilder.build_metadata_prompt(file_info, schema, max_content_chars=1000)
+
+    # Should include full content without truncation
+    assert "Short content" in prompt
+    assert "(truncated)" not in prompt
+
+
+def test_build_metadata_prompt_large_max_chars():
+    """Test prompt building with large max_content_chars value."""
+    # Create large content
+    large_content = "X" * 500000
+
+    file_info = FileInfo(bucket="test-bucket", key="large.txt", content=large_content)
+
+    schema = {"type": "object", "properties": {"title": {"type": "string"}}}
+
+    # Use a large max_content_chars (e.g., for Claude Haiku 4.5)
+    prompt = PromptBuilder.build_metadata_prompt(file_info, schema, max_content_chars=472800)
+
+    # Should include up to 472800 characters
+    assert "X" * 472800 in prompt
+    assert "(truncated)" in prompt
