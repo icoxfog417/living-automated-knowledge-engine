@@ -3,7 +3,7 @@
 rules:
   file_patterns:
     # PDF documents
-    - pattern: "/**/*.pdf"
+    - pattern: "**/*.pdf"
       schema:
         type: "object"
         properties:
@@ -81,7 +81,7 @@ rules:
           ["department", "document_type", "sensitivity_level", "data_period"]
 
     # Text files
-    - pattern: "/**/*.txt"
+    - pattern: "**/*.txt"
       schema:
         type: "object"
         properties:
@@ -103,7 +103,7 @@ rules:
           ["department", "document_type", "sensitivity_level", "keywords"]
 
     # Markdown files
-    - pattern: "/**/*.md"
+    - pattern: "**/*.md"
       schema:
         type: "object"
         properties:

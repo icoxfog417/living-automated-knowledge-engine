@@ -9,9 +9,13 @@ EventBridge (S3 Object Created)
   ↓
 Lambda Handler (handler.py)
   ↓
+EventParser (event_parser.py) - イベント解析
+  ↓
 MetadataGenerator (metadata_generator.py)
-  ├─ ConfigLoader (config_loader.py) - 設定読み込み
-  ├─ BedrockClient (bedrock_client.py) - AI生成
+  ├─ RuleMatcher (rule_matcher.py) - ルール特定
+  ├─ PromptBuilder (prompt_builder.py) - プロンプト生成
+  ├─ BedrockClient (bedrock_client.py)
+  │   └─ JsonExtractor (json_extractor.py) - JSON抽出
   └─ S3Operations (s3_operations.py) - ファイル読み書き
   ↓
 {file}.metadata.json が S3 に保存される
@@ -25,7 +29,12 @@ src/
 ├── core/                   # コアロジック
 │   ├── schema.py          # データモデル
 │   ├── config_loader.py   # 設定ファイル読み込み
-│   └── metadata_generator.py  # メタデータ生成
+│   └── metadata_generator.py  # メタデータ生成オーケストレーション
+├── services/              # ビジネスロジック
+│   ├── event_parser.py    # EventBridgeイベント解析
+│   ├── rule_matcher.py    # ファイルパターンマッチング
+│   ├── prompt_builder.py  # JSON SchemaからAIプロンプト生成
+│   └── json_extractor.py  # Bedrock応答からJSON抽出
 ├── clients/               # 外部サービスクライアント
 │   ├── s3_operations.py   # S3 操作
 │   └── bedrock_client.py  # Bedrock API
@@ -35,14 +44,59 @@ src/
 
 ## 主要コンポーネント
 
-### 1. データモデル (`core/schema.py`)
+### 1. コアロジック (`core/`)
 
-- `FileInfo`: S3 ファイル情報
-- `MetadataRule`: メタデータ生成ルール
+#### `schema.py` - データモデル
+
+- `FileInfo`: S3 ファイル情報（bucket, key, content）
+- `MetadataRule`: メタデータ生成ルール（pattern, schema）
 - `Config`: アプリケーション設定
 - `GeneratedMetadata`: 生成結果
 
-### 2. 設定ファイル (`config/config.yaml`)
+#### `config_loader.py` - 設定読み込み
+
+- YAML ファイルから設定を読み込み、バリデーション
+
+#### `metadata_generator.py` - メタデータ生成オーケストレーション
+
+- 各サービスを統合してメタデータ生成プロセスを管理
+
+### 2. ビジネスロジック (`services/`)
+
+#### `event_parser.py` - イベント解析
+
+- EventBridge から受け取る S3 イベントを解析
+- ファイル情報（bucket, key）を抽出
+
+#### `rule_matcher.py` - ルールマッチング
+
+- ファイルパスに合致するメタデータルールを検索
+- `pathlib.PurePosixPath.match()`を使用したパターンマッチング
+
+#### `prompt_builder.py` - プロンプト生成
+
+- JSON Schema から自然言語プロンプトを自動生成
+- ファイル内容とスキーマを組み合わせて AI 用のプロンプトを作成
+
+#### `json_extractor.py` - JSON 抽出
+
+- Bedrock の応答から JSON を抽出・パース
+- マークダウンコードブロック内の JSON を検出
+
+### 3. 外部サービスクライアント (`clients/`)
+
+#### `bedrock_client.py` - Bedrock API
+
+- AWS Bedrock との通信
+- Converse API を使用したメタデータ生成
+- 構造化出力（Structured Output）のサポート
+
+#### `s3_operations.py` - S3 操作
+
+- S3 からのファイル読み込み
+- メタデータファイルの保存
+
+### 4. 設定ファイル (`config/config.yaml`)
 
 ファイルパターンごとに JSON Schema を定義:
 
@@ -59,7 +113,7 @@ rules:
         required: ["department"]
 ```
 
-### 3. メタデータ生成フロー
+### 5. メタデータ生成フロー
 
 1. **ファイル読み込み**: S3 からファイル内容を取得
 2. **ルール特定**: ファイルパスに合致するルールを検索
@@ -75,39 +129,6 @@ rules:
 - `MetadataGenerator`: ファイル情報を受け取り、メタデータを返す
 - `BedrockClient`: プロンプトを受け取り、JSON を返す
 - `S3Operations`: bucket/key を受け取り、ファイル内容を返す
-
-### 独立してテストする例
-
-```python
-from core.config_loader import ConfigLoader
-from core.metadata_generator import MetadataGenerator
-from core.schema import FileInfo
-from clients.bedrock_client import BedrockClient
-
-# 設定読み込み
-config = ConfigLoader.load('src/config/config.yaml')
-
-# Bedrockクライアント初期化
-bedrock = BedrockClient(
-    model_id=config.bedrock_model_id,
-    max_tokens=config.bedrock_max_tokens,
-    temperature=config.bedrock_temperature
-)
-
-# メタデータ生成器初期化
-generator = MetadataGenerator(config, bedrock)
-
-# テストデータ
-file_info = FileInfo(
-    bucket='test-bucket',
-    key='docs/report.pdf',
-    content='これは営業報告書です...'
-)
-
-# メタデータ生成
-result = generator.generate_metadata(file_info)
-print(result.metadata)
-```
 
 ## メタデータファイルの命名規則
 
@@ -138,108 +159,126 @@ rules:
         required: ["custom_field"]
 ```
 
-## 依存関係
+## パターンマッチングの制約と注意事項
 
-```toml
-dependencies = [
-    "boto3>=1.34.0",      # AWS SDK
-    "pyyaml>=6.0",        # YAML設定ファイル
-    "jsonschema>=4.20.0", # JSON Schemaバリデーション
-]
+本システムは Python の `pathlib.PurePosixPath.match()` を使用してファイルパターンマッチングを行います。この動作には以下の特徴と制約があります。
+
+### 1. 部分マッチの動作
+
+**重要**: パターンはパスの**末尾部分**とマッチします。
+
+```yaml
+# この設定の場合...
+- pattern: "*.txt"
+  schema: ...
+# 以下のすべてにマッチします：
+# ✓ report.txt          （ルートレベル）
+# ✓ docs/report.txt     （1階層下）
+# ✓ deep/path/file.txt  （深い階層）
 ```
 
-## デプロイ
-
-CDK を使用してデプロイ:
-
-```bash
-npm run build
-cdk deploy
+```yaml
+# この設定の場合...
+- pattern: "README.md"
+  schema: ...
+# 以下のすべてにマッチします：
+# ✓ README.md           （ルートレベル）
+# ✓ docs/README.md      （サブディレクトリ内）
 ```
 
-デプロイされるリソース:
+### 2. 推奨されるパターン記法
 
-- Lambda 関数（Bedrock アクセス権限付き）
-- S3 バケット（EventBridge 有効化）
-- EventBridge ルール（S3 オブジェクト作成イベント）
+より明確で予測可能な動作のために、`**` を明示的に使用することを推奨します：
+
+```yaml
+rules:
+  file_patterns:
+    # ✓ 推奨: すべての階層を明示的に指定
+    - pattern: "**/*.txt"
+      schema: ...
+
+    # ✓ 推奨: 特定ディレクトリ配下を明示
+    - pattern: "reports/**/*.csv"
+      schema: ...
+
+    # ✓ 推奨: 特定ディレクトリ直下のみ
+    - pattern: "docs/*.md"
+      schema: ...
+      # 注意: これも "deep/docs/file.md" にマッチします
+
+    # ⚠️ 注意: 意図しないマッチが起こる可能性
+    - pattern: "*.txt"
+      schema: ...
+      # すべての階層の .txt ファイルにマッチ
+```
+
+### 3. 深いネスト構造の制限
+
+非常に深い階層（4 階層以上）では、パターンマッチングが不安定になる場合があります：
+
+```yaml
+# この設定で...
+- pattern: "reports/**/*.csv"
+  schema: ...
+# マッチする例：
+# ✓ reports/data.csv
+# ✓ reports/2024/data.csv
+# ✓ reports/2024/Q1/data.csv
+
+# マッチしない可能性がある例：
+# ? reports/very/deep/nested/path/data.csv  （4階層以上）
+```
+
+**対処法**: 通常の使用では問題ありませんが、極端に深い階層構造が予想される場合は、より一般的なパターン `**/*.csv` の使用を検討してください。
+
+### 4. 複数拡張子の記法は非サポート
+
+Bash スタイルの `{md,txt}` のようなブレース展開は使用できません：
+
+```yaml
+# ❌ 動作しません
+- pattern: "**/*.{md,txt}"
+  schema: ...
+
+# ✓ 正しい方法: 個別のルールとして定義
+- pattern: "**/*.md"
+  schema:
+    type: "object"
+    properties:
+      title: { type: "string" }
+    required: ["title"]
+
+- pattern: "**/*.txt"
+  schema:
+    type: "object"
+    properties:
+      title: { type: "string" }
+    required: ["title"]
+```
+
+### 5. ルールの優先順位
+
+複数のルールがマッチする場合、**最初にマッチしたルール**が適用されます：
+
+```yaml
+rules:
+  file_patterns:
+    # この順序が重要
+    - pattern: "docs/**/*.md" # より具体的なルール
+      schema: { ... } # ← docs 配下はこちらが適用される
+
+    - pattern: "**/*.md" # より一般的なルール
+      schema: { ... } # ← それ以外はこちらが適用される
+```
 
 ## テスト
 
-### 統合テストの実行
-
-実際の Bedrock API を使用した統合テストが用意されています。テストコードは完全に自己完結しており、外部ファイルに依存しません。
+プロジェクトには Makefile が用意されており、簡単にテストを実行できます。
 
 ```bash
 # テストディレクトリに移動
 cd lambda/metadata-generator
 
-# テスト実行（AWS 認証情報が必要）
-python tests/test_integration.py
+# すべてのテストを実行
+make test
 ```
-
-### テストの特徴
-
-- **自己完結**: 設定とテストデータはすべてコード内に定義
-- **実用的**: 実際の Bedrock API を使用した統合テスト
-- **シンプル**: 外部ファイル依存なし
-
-テストの内容：
-
-- テキストファイル（`.txt`）のメタデータ生成
-- Markdown ファイル（`.md`）のメタデータ生成
-- JSON Schema に基づくバリデーション
-
-### テストコードの構造
-
-```python
-# 設定を直接定義
-TEST_CONFIG = Config(
-    rules=[...],
-    bedrock_model_id="anthropic.claude-3-sonnet-20240229-v1:0",
-    ...
-)
-
-# テストデータを定義
-SAMPLE_REPORT_TXT = """営業部 月次報告書..."""
-
-# テスト実行
-generator = MetadataGenerator(TEST_CONFIG, bedrock)
-result = generator.generate_metadata(file_info)
-```
-
-## デプロイ後の動作確認
-
-1. S3 バケットにファイルをアップロード
-2. Lambda 関数が自動実行される
-3. CloudWatch Logs でログ確認
-4. S3 に`.metadata.json`が生成される
-
-```bash
-# ファイルアップロード
-aws s3 cp test.pdf s3://lake-data-{account}-{region}/docs/test.pdf
-
-# ログ確認
-aws logs tail /aws/lambda/lake-metadata-generator --follow
-
-# メタデータ確認
-aws s3 cp s3://lake-data-{account}-{region}/docs/test.pdf.metadata.json -
-```
-
-## トラブルシューティング
-
-### メタデータが生成されない
-
-- CloudWatch Logs でエラーを確認
-- ファイルパスがルールに合致しているか確認
-- Bedrock モデルへのアクセス権限を確認
-
-### JSON Schema バリデーションエラー
-
-- ログに出力される詳細なエラーメッセージを確認
-- `config.yaml`のスキーマ定義を見直す
-- 必須フィールドが適切に定義されているか確認
-
-### タイムアウト
-
-- Lambda 関数のタイムアウトを延長（現在 60 秒）
-- ファイルサイズが大きい場合は、読み込みサイズを制限（現在 1MB）
