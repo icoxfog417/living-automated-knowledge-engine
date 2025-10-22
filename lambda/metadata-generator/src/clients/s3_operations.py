@@ -21,14 +21,14 @@ class S3Operations:
         """
         self.s3_client = s3_client or boto3.client("s3")
 
-    def read_file(self, bucket: str, key: str, max_bytes: int = 1024 * 1024) -> FileInfo:
+    def read_file(self, bucket: str, key: str, max_bytes: int = 50 * 1024 * 1024) -> FileInfo:
         """
         Read a file from S3.
 
         Args:
             bucket: S3 bucket name
             key: Object key
-            max_bytes: Maximum bytes to read (default: 1MB)
+            max_bytes: Maximum bytes to read (default: 50MB for Bedrock KB compatibility)
 
         Returns:
             FileInfo object with file content
@@ -42,15 +42,11 @@ class S3Operations:
             # Read content with size limit
             content_bytes = response["Body"].read(max_bytes)
 
-            # Try to decode as text
-            try:
-                content = content_bytes.decode("utf-8")
-            except UnicodeDecodeError:
-                # If not UTF-8, try other encodings
-                try:
-                    content = content_bytes.decode("shift_jis")
-                except UnicodeDecodeError:
-                    content = content_bytes.decode("latin-1")
+            # Get appropriate parser and parse content
+            from ..services.file_parser import FileParser
+
+            parser = FileParser.get_parser(key)
+            content = parser.parse(content_bytes)
 
             return FileInfo(bucket=bucket, key=key, content=content)
         except Exception as e:
@@ -82,7 +78,6 @@ class S3Operations:
                 ContentType="application/json",
                 Metadata={
                     "generated-by": "lake-metadata-generator",
-                    "source-file": metadata.file_key,
                 },
             )
         except Exception as e:

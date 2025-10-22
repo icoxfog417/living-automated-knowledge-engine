@@ -130,6 +130,6 @@ rules:
 # Bedrock Configuration
 bedrock:
   model_id: "global.anthropic.claude-haiku-4-5-20251001-v1:0"
-  max_tokens: 640000
+  max_tokens: 64000
   input_context_window: 200000
   temperature: 0.1
