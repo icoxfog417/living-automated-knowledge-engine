@@ -59,6 +59,7 @@ TEST_CONFIG = Config(
     ],
     bedrock_model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0",
     bedrock_max_tokens=2000,
+    bedrock_input_context_window=200000,
     bedrock_temperature=0.1,
 )
 

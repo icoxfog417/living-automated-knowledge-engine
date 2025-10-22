@@ -44,8 +44,15 @@ class MetadataGenerator:
         if not rule:
             raise ValueError(f"No matching rule found for file: {file_info.key}")
 
+        # Calculate max content characters based on input context window
+        max_content_chars = PromptBuilder.calculate_max_content_chars(
+            input_context_window=self.config.bedrock_input_context_window
+        )
+
         # Build prompt from JSON Schema (delegated to PromptBuilder)
-        prompt = PromptBuilder.build_metadata_prompt(file_info, rule.schema)
+        prompt = PromptBuilder.build_metadata_prompt(
+            file_info, rule.schema, max_content_chars=max_content_chars
+        )
 
         # Generate metadata using Bedrock with structured output
         raw_metadata = self.bedrock_client.generate_metadata(prompt, json_schema=rule.schema)

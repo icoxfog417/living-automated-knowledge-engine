@@ -39,6 +39,7 @@ class Config:
     rules: list[MetadataRule]
     bedrock_model_id: str
     bedrock_max_tokens: int
+    bedrock_input_context_window: int
     bedrock_temperature: float
 
 

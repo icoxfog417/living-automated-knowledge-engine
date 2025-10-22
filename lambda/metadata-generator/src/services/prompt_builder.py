@@ -7,13 +7,45 @@ class PromptBuilder:
     """Build prompts for metadata generation."""
 
     @staticmethod
-    def build_metadata_prompt(file_info: FileInfo, schema: dict) -> str:
+    def calculate_max_content_chars(
+        input_context_window: int,
+        prompt_overhead_tokens: int = 3000,
+        safety_margin: float = 0.8,
+        chars_per_token: int = 3,
+    ) -> int:
+        """
+        Calculate maximum content characters based on input context window.
+
+        Args:
+            input_context_window: Model's input context window size in tokens
+            prompt_overhead_tokens: Estimated tokens for prompt structure (schema, instructions, etc.)
+            safety_margin: Safety factor (0.0-1.0) to use of available tokens
+            chars_per_token: Character to token conversion ratio
+
+        Returns:
+            Maximum number of characters to include from file content
+        """
+        # ファイル内容に使用可能なトークン数
+        available_tokens = input_context_window - prompt_overhead_tokens
+
+        # 安全マージンを適用
+        safe_available_tokens = int(available_tokens * safety_margin)
+
+        # トークン数を文字数に変換
+        max_chars = safe_available_tokens * chars_per_token
+
+        # 最小値の保証（3000文字）
+        return max(max_chars, 3000)
+
+    @staticmethod
+    def build_metadata_prompt(file_info: FileInfo, schema: dict, max_content_chars: int = 3000) -> str:
         """
         Build a prompt for Bedrock based on file info and JSON Schema.
 
         Args:
             file_info: File information
             schema: JSON Schema for metadata
+            max_content_chars: Maximum characters to include from file content
 
         Returns:
             Formatted prompt string
@@ -55,8 +87,8 @@ class PromptBuilder:
             field_descriptions.append(field_info)
 
         # Limit content length for prompt
-        content_preview = file_info.content[:3000]
-        if len(file_info.content) > 3000:
+        content_preview = file_info.content[:max_content_chars]
+        if len(file_info.content) > max_content_chars:
             content_preview += "\n... (truncated)"
 
         return f"""Please generate metadata for the following file according to the \
