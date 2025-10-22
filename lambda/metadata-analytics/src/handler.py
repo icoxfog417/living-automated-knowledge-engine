@@ -5,12 +5,23 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
+from .agents.analytics_agent import MetadataAnalyticsAgent
 from .collector.metadata_collector import MetadataCollector
 from .collector.models import CollectionParams
+from .utils.chart_generator import ChartGenerator
+from .utils.pdf_generator import PDFReportGenerator
+from .utils.s3_operations import upload_to_s3
 
 # Set up logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# Initialize reusable components outside handler for Lambda container reuse
+collector = MetadataCollector()
+chart_generator = ChartGenerator()
+pdf_generator = PDFReportGenerator()
+region = os.environ.get("AWS_REGION", "us-east-1")
+analytics_agent = MetadataAnalyticsAgent(region=region)
 
 
 def lambda_handler(event, context):
@@ -27,10 +38,7 @@ def lambda_handler(event, context):
     Returns:
         Response dictionary with status and summary
     """
-    try:
-        logger.info("Starting metadata analytics...")
-        logger.info(f"Event: {json.dumps(event)}")
-
+    try:       
         # Get bucket name from environment variable
         bucket_name = os.environ.get("BUCKET_NAME")
         if not bucket_name:
@@ -40,8 +48,7 @@ def lambda_handler(event, context):
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=1)
 
-        logger.info(f"Target bucket: {bucket_name}")
-        logger.info(f"Analysis period: {start_date} to {end_date}")
+        logger.info(f"Target: {bucket_name}, Period: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
 
         # Configure collection parameters
         params = CollectionParams(
@@ -52,61 +59,67 @@ def lambda_handler(event, context):
         )
 
         # Collect metadata
-        collector = MetadataCollector()
         result = collector.collect(params)
 
-        logger.info("=" * 80)
-        logger.info("METADATA ANALYTICS RESULTS")
-        logger.info("=" * 80)
-        logger.info(f"Total scanned: {result.total_scanned} files")
-        logger.info(f"Total collected: {result.total_collected} files")
-        logger.info(f"Execution time: {result.execution_time_seconds:.2f}s")
-        logger.info(f"Data transfer: {result.data_transfer_bytes / 1024 / 1024:.2f} MB")
+        logger.info(f"Collected {result.total_collected} files ({result.total_scanned} scanned) in {result.execution_time_seconds:.2f}s, {result.data_transfer_bytes / 1024 / 1024:.2f} MB")
 
         # Get aggregation
         aggregation = result.aggregate()
 
-        # Log discovered schema
-        logger.info("\n" + "=" * 80)
-        logger.info("DISCOVERED SCHEMA")
-        logger.info("=" * 80)
-        for key, info in aggregation["schema"].items():
-            logger.info(f"\n{key}:")
-            logger.info(f"  Occurrence rate: {info['occurrence_rate']}%")
-            logger.info(f"  Types: {', '.join(info['types'])}")
-            logger.info(f"  Non-null count: {info['non_null_count']}")
-            logger.info(f"  Sample values: {', '.join(info['sample_values'][:3])}")
+        # Generate charts and tables deterministically
+        chart_results, table_data = chart_generator.generate_charts(aggregation)
+        logger.info(f"Generated {len(chart_results)} charts, {len(table_data)} metadata detail tables")
 
-        # Log aggregations
-        logger.info("\n" + "=" * 80)
-        logger.info("AGGREGATIONS")
-        logger.info("=" * 80)
-        for key, stats in aggregation["aggregations"].items():
-            logger.info(f"\n{key}:")
-            if isinstance(stats, dict) and "count" in stats and "avg" in stats:
-                # Numeric aggregation
-                logger.info(f"  Count: {stats['count']}")
-                logger.info(f"  Min: {stats['min']}")
-                logger.info(f"  Max: {stats['max']}")
-                logger.info(f"  Average: {stats['avg']}")
-                logger.info(f"  Sum: {stats['sum']}")
-            else:
-                # Categorical aggregation
-                for value, count in list(stats.items())[:5]:
-                    logger.info(f"  {value}: {count}")
-                if len(stats) > 5:
-                    logger.info(f"  ... and {len(stats) - 5} more")
+        # Prepare chart information for AI agent
+        chart_info = [
+            {
+                "title": chart.title,
+                "chart_type": chart.chart_type,
+                "metadata_key": chart.metadata_key,
+                "description": chart.description,
+                "file_path": chart.file_path,
+            }
+            for chart in chart_results
+        ]
 
-        # Log file types
-        logger.info("\n" + "=" * 80)
-        logger.info("BY FILE TYPE")
-        logger.info("=" * 80)
-        for ext, count in aggregation["by_file_type"].items():
-            logger.info(f"{ext}: {count} files")
+        # Perform AI analysis with pre-generated charts
+        analysis_result = analytics_agent.analyze(
+            statistics=aggregation, chart_info=chart_info
+        )
+        logger.info(f"AI analysis completed in {analysis_result['execution_time']:.2f}s")
 
-        logger.info("\n" + "=" * 80)
-        logger.info("ANALYTICS COMPLETED SUCCESSFULLY")
-        logger.info("=" * 80)
+        # Generate PDF report
+        chart_paths_for_pdf = [chart.file_path for chart in chart_results]
+        pdf_path = pdf_generator.generate_report(
+            aggregation=aggregation,
+            analysis=analysis_result,
+            start_date=start_date,
+            end_date=end_date,
+            chart_paths=chart_paths_for_pdf,
+            table_data=table_data,
+        )
+
+        # Upload PDF to S3
+        report_date = end_date.strftime("%Y-%m-%d")
+        s3_key = f"analytics-reports/{report_date}/metadata-analytics-report.pdf"
+        s3_url = upload_to_s3(bucket_name, s3_key, pdf_path)
+        logger.info(f"PDF uploaded: {s3_url}")
+
+        # Upload charts to S3
+        chart_urls = []
+        if chart_results:
+            for i, chart_result in enumerate(chart_results, 1):
+                if os.path.exists(chart_result.file_path):
+                    chart_filename = f"{i:02d}_{chart_result.metadata_key}_{chart_result.chart_type}.png"
+                    chart_s3_key = f"analytics-reports/{report_date}/charts/{chart_filename}"
+                    chart_url = upload_to_s3(bucket_name, chart_s3_key, chart_result.file_path)
+                    chart_urls.append(chart_url)
+                    os.remove(chart_result.file_path)
+
+        os.remove(pdf_path)
+        
+        logger.info(f"Charts uploaded: {len(chart_urls)} files")
+        logger.info("Analytics completed successfully")
 
         return {
             "statusCode": 200,
@@ -117,9 +130,16 @@ def lambda_handler(event, context):
                         "total_scanned": result.total_scanned,
                         "total_collected": result.total_collected,
                         "execution_time_seconds": result.execution_time_seconds,
-                        "data_transfer_mb": round(
-                            result.data_transfer_bytes / 1024 / 1024, 2
-                        ),
+                        "data_transfer_mb": round(result.data_transfer_bytes / 1024 / 1024, 2),
+                    },
+                    "analysis": {
+                        "executive_summary": analysis_result["executive_summary"],
+                        "key_findings_count": len(analysis_result["key_findings"]),
+                        "charts_generated": len(analysis_result["charts"]),
+                    },
+                    "outputs": {
+                        "report_url": s3_url,
+                        "chart_urls": chart_urls,
                     },
                 },
                 ensure_ascii=False,
@@ -130,7 +150,5 @@ def lambda_handler(event, context):
         logger.error(f"Error in metadata analytics: {str(e)}", exc_info=True)
         return {
             "statusCode": 500,
-            "body": json.dumps(
-                {"error": str(e), "message": "Metadata analytics failed"}
-            ),
+            "body": json.dumps({"error": str(e), "message": "Metadata analytics failed"}),
         }

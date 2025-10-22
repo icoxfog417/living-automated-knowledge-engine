@@ -11,6 +11,37 @@ from botocore.exceptions import ClientError
 logger = logging.getLogger(__name__)
 
 
+def upload_to_s3(bucket: str, key: str, file_path: str) -> str:
+    """Upload a file to S3.
+
+    Args:
+        bucket: S3 bucket name
+        key: S3 object key (path in bucket)
+        file_path: Local file path to upload
+
+    Returns:
+        S3 URL of the uploaded file (s3://bucket/key format)
+
+    Raises:
+        ClientError: If upload fails
+    """
+    s3_client = boto3.client("s3")
+
+    try:
+        logger.info(f"Uploading {file_path} to s3://{bucket}/{key}")
+        s3_client.upload_file(file_path, bucket, key)
+        s3_url = f"s3://{bucket}/{key}"
+        logger.info(f"Successfully uploaded to {s3_url}")
+        return s3_url
+
+    except ClientError as e:
+        logger.error(f"Failed to upload {file_path} to s3://{bucket}/{key}: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error uploading {file_path}: {e}")
+        raise
+
+
 class S3Operations:
     """Utility class for S3 operations."""
 

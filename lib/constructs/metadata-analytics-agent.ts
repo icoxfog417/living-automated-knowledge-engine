@@ -71,7 +71,7 @@ export class MetadataAnalyticsAgent extends Construct {
           ],
         },
         timeout: cdk.Duration.minutes(15),
-        memorySize: 512,
+        memorySize: 1536, // Increased for AI agent operations with CodeInterpreter
         logGroup: logGroup,
         environment: {
           BUCKET_NAME: props.targetBucket.bucketName,
@@ -79,8 +79,36 @@ export class MetadataAnalyticsAgent extends Construct {
       }
     );
 
-    // Grant S3 read permissions to Lambda
+    // Grant S3 read and write permissions to Lambda
     props.targetBucket.grantRead(this.lambdaFunction);
+    props.targetBucket.grantPut(this.lambdaFunction);
+
+    // Grant Bedrock permissions for AI agent operations
+    this.lambdaFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "bedrock:InvokeModel",
+          "bedrock:InvokeModelWithResponseStream",
+        ],
+        resources: ["*"],
+      })
+    );
+
+    // Grant Bedrock AgentCore permissions for CodeInterpreter tool
+    this.lambdaFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          "bedrock:CreateKnowledgeBase",
+          "bedrock:CreateAgent",
+          "bedrock:CreateAgentActionGroup",
+          "bedrock:InvokeAgent",
+          "bedrock:PrepareAgent",
+        ],
+        resources: ["*"],
+      })
+    );
 
     // CloudWatch Events rule for scheduled execution
     this.scheduledRule = new events.Rule(this, "ScheduledAnalyticsRule", {
