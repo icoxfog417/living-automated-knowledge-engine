@@ -113,6 +113,13 @@ Follow the design document structure:
 3. **Single Responsibility**: Each class has one clear purpose
 4. **Use Strands Framework**: Leverage `@tool` decorator, don't build custom tool execution
 
+## CDK Deployment
+
+For deployments, use:
+```bash
+npx cdk deploy --require-approval never
+```
+
 ## Required Dependencies
 
 Core dependencies for the project:

@@ -2,6 +2,7 @@ import * as cdk from "aws-cdk-lib";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 import { LAKEAgent } from "./constructs/lake-agent";
+import { LAKEEmailProcessor } from "./constructs/lake-email-processor";
 
 export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -10,6 +11,8 @@ export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
     // Read configuration from cdk.json
     const lakeConfig = this.node.tryGetContext('lake') || {};
     const existingBucketName = lakeConfig.existingBucketName;
+    const emailDomain = lakeConfig.emailDomain;
+    const allowedDomains = lakeConfig.allowedDomains || [];
 
     let targetBucket: s3.IBucket;
 
@@ -36,6 +39,16 @@ export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
       targetBucket
     });
 
+    // Add email processor if email domain is configured
+    let emailProcessor: LAKEEmailProcessor | undefined;
+    if (emailDomain) {
+      emailProcessor = new LAKEEmailProcessor(this, "LAKEEmailProcessor", {
+        dataBucket: targetBucket,
+        emailDomain: emailDomain,
+        allowedDomains: allowedDomains,
+      });
+    }
+
     new cdk.CfnOutput(this, "LAKEAgentFunctionArn", {
       value: lakeAgent.lambdaFunction.functionArn,
       description: "Lambda function ARN for metadata generation",
@@ -45,5 +58,27 @@ export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
       value: lakeAgent.eventRule.ruleArn,
       description: "EventBridge Rule ARN for S3 object created events",
     });
+
+    if (emailProcessor) {
+      new cdk.CfnOutput(this, "LAKEEmailProcessorFunctionArn", {
+        value: emailProcessor.emailProcessorFunction.functionArn,
+        description: "Lambda function ARN for email processing",
+      });
+
+      new cdk.CfnOutput(this, "LAKEEmailBucketName", {
+        value: emailProcessor.emailBucket.bucketName,
+        description: "S3 bucket name for email storage",
+      });
+
+      new cdk.CfnOutput(this, "LAKEUploadEmailAddress", {
+        value: `upload@${emailDomain}`,
+        description: "Email address for document uploads",
+      });
+
+      new cdk.CfnOutput(this, "LAKEReportsEmailAddress", {
+        value: `reports@${emailDomain}`,
+        description: "Email address for metadata reports",
+      });
+    }
   }
 }

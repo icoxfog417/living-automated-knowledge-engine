@@ -79,9 +79,11 @@ metadata_schema:
 
 ### Phase 3: Email Integration with SES
 
+> **Detailed Design**: See [Email Integration Design](./design_mail.md) for comprehensive email functionality specification.
+
 #### Step 3.1: SES Configuration
 - Set up SES for sending and receiving emails
-- Configure email parsing for user commands
+- Configure email parsing for user commands  
 - Implement email templates for reports and notifications
 
 #### Step 3.2: Email Command Processing
