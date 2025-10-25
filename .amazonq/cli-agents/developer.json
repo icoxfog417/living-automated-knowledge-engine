@@ -53,6 +53,9 @@
   ],
   "allowedTools": [
     "fs_read",
+    "prompt_understanding",
+    "aws___search_documentation",
+    "aws___read_documentation",
     "fsReplace",
     "listDirectory",
     "fileSearch"

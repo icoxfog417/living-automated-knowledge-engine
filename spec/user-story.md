@@ -33,9 +33,8 @@ Sarah is a Knowledge Manager at TechCorp who needs to organize thousands of docu
      }
      ```
 
-2. **Upload meeting minutes** via email
-   - Send email to: `upload@lake.techcorp.com`
-   - Attach: `Engineering_Standup_Oct23.docx`
+2. **Upload meeting minutes** via AWS Console or CLI
+   - Upload: `Engineering_Standup_Oct23.docx` to S3 bucket
    - LAKE processes and generates metadata automatically
 
 ### Step 3: Enhanced Search Experience (45 seconds)
@@ -53,13 +52,13 @@ Sarah is a Knowledge Manager at TechCorp who needs to organize thousands of docu
 ### Step 4: Metadata Management (30 seconds)
 **Sarah manages and monitors metadata**
 
-1. **Request metadata statistics** via email:
-   - Send: "Get metadata stats" to `reports@lake.techcorp.com`
-   - Receives summary: "150 documents processed, 5 departments, 12 document types"
+1. **Review metadata via AWS Console**:
+   - Check generated `.metadata.json` files in S3
+   - View processing logs in CloudWatch
 
-2. **Review and adjust rules**:
-   - Check which documents need better categorization
+2. **Adjust configuration**:
    - Update `config.yaml` for improved accuracy
+   - Monitor processing success rates
 
 ## Key Benefits Demonstrated
 
@@ -71,7 +70,7 @@ Sarah is a Knowledge Manager at TechCorp who needs to organize thousands of docu
 ### For Administrators
 - **Zero manual tagging**: Automatic metadata generation
 - **Consistent categorization**: Rule-based approach ensures uniformity
-- **Easy monitoring**: Email-based statistics and reporting
+- **Easy monitoring**: CloudWatch logs and S3 metadata files
 
 ### For Organizations
 - **Improved productivity**: Reduce time spent searching for documents
@@ -86,9 +85,9 @@ Sarah is a Knowledge Manager at TechCorp who needs to organize thousands of docu
 
 ## Demonstration Flow Summary
 1. **Setup**: Configure LAKE with organizational rules (30s)
-2. **Upload**: Show automatic metadata generation for different file types (45s)
+2. **Upload**: Show automatic metadata generation via S3 upload (45s)
 3. **Search**: Demonstrate enhanced Knowledge Base filtering (45s)
-4. **Manage**: Show metadata statistics and rule management (30s)
+4. **Manage**: Show metadata files and CloudWatch monitoring (30s)
 
 **Total Demo Time**: 2 minutes 30 seconds
 
