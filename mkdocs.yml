@@ -1,0 +1,9 @@
+site_name: Living Automated Knowledge Engine
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+
+nav:
+  - Home: README.md
