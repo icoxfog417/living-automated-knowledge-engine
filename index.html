@@ -348,12 +348,7 @@
 <h2 id="problem">Problem</h2>
 <p>Poor metadata management severely limits RAG accuracy in knowledge bases. Amazon Bedrock Knowledge Bases requires customers to prepare <code>metadata.json</code> files for all documents and column-specific metadata for tabular data. These labor-intensive requirements often lead customers to abandon proper metadata management, resulting in degraded accuracy and forcing reliance on expensive high-performance models to compensate.</p>
 <h2 id="solution">Solution</h2>
-<p>LAKE provides automatic metadata generation with one-click deployment for S3-based knowledge sources. The system analyzes files and generates appropriate tags based on user-defined parameters, eliminating manual metadata creation. This AI-powered librarian continuously organizes knowledge sources with minimal human intervention.</p>
-<p>Key features:
-- <strong>Automatic Processing</strong>: Files uploaded to S3 trigger metadata generation via EventBridge and Lambda
-- <strong>Configurable Rules</strong>: User-defined parameters in <code>config.yaml</code> control metadata generation
-- <strong>Bedrock Integration</strong>: Generated metadata follows Knowledge Bases format requirements
-- <strong>Monitoring</strong>: CloudWatch logs and S3 metadata files provide visibility</p>
+<p>LAKE provides automatic metadata generation with one-click deployment for S3-based knowledge sources. This agent analyzes files and generates appropriate tags based on user-defined parameters, eliminating manual metadata creation. This AI-powered librarian continuously organizes knowledge sources with minimal human intervention and propose optimized metadata structure based on stored files and user's prompts proactively.</p>
 <h2 id="impact">Impact</h2>
 <p>LAKE's concept is elegantly simple—automatically generate metadata when files are uploaded—yet delivers transformative results. This innovation emerged from real customer cases, proving its effectiveness: 40% increase in RAG accuracy and 60% reduction in knowledge management costs. By removing technical barriers, LAKE makes high-quality RAG accessible to all customers.</p>
 
