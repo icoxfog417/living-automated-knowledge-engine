@@ -6,9 +6,9 @@ node_modules
 # CDK asset staging directory
 .cdk.staging
 cdk.out
-<<<<<<< HEAD
 
 dist
-=======
 .workspace/
->>>>>>> 810df1f16169fcbf4298c4c69395bf24ba0d2eff
+
+# MkDocs build output
+site/
