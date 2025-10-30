@@ -33,17 +33,14 @@ class MetadataGenerator:
 
         Returns:
             Generated metadata
-
-        Raises:
-            ValueError: If no matching rule found or generation fails
         """
-        # Find matching path rule
+        # Find matching path rule (optional)
         rule = self.rule_matcher.find_matching_rule(file_info.key)
-        if not rule:
-            raise ValueError(f"No matching rule found for file: {file_info.key}")
-
-        # Extract path-based metadata (highest priority)
-        path_metadata = self.rule_matcher.extract_values(file_info.key, rule)
+        path_metadata = {}
+        
+        if rule:
+            # Extract path-based metadata (highest priority)
+            path_metadata = self.rule_matcher.extract_values(file_info.key, rule)
 
         # Build JSON schema from metadata fields for AI generation
         json_schema = self._build_json_schema()
