@@ -58,8 +58,13 @@ class MetadataGenerator:
         # Generate metadata using Bedrock
         ai_metadata = self.bedrock_client.generate_metadata(prompt, json_schema=json_schema)
 
-        # Merge metadata: path-based overrides AI-generated
-        final_metadata = {**ai_metadata, **path_metadata}
+        # Add S3 upload date if available
+        s3_metadata = {}
+        if file_info.uploaded_date:
+            s3_metadata["uploaded_date"] = file_info.uploaded_date
+
+        # Merge metadata: path-based > S3 metadata > AI-generated
+        final_metadata = {**ai_metadata, **s3_metadata, **path_metadata}
 
         return GeneratedMetadata(metadata=final_metadata, file_key=file_info.key)
 

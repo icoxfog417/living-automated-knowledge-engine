@@ -12,6 +12,9 @@ class FileInfo:
     bucket: str
     key: str
     content: str
+    uploaded_date: str | None = None
+    content_length: int | None = None
+    etag: str | None = None
 
     @property
     def file_name(self) -> str:

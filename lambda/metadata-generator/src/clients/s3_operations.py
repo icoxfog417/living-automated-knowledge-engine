@@ -48,7 +48,18 @@ class S3Operations:
             parser = FileParser.get_parser(key)
             content = parser.parse(content_bytes)
 
-            return FileInfo(bucket=bucket, key=key, content=content)
+            # Extract S3 metadata - LastModified is when object was uploaded to S3
+            last_modified = response.get("LastModified")
+            uploaded_date_str = last_modified.strftime("%Y-%m-%d") if last_modified else None
+
+            return FileInfo(
+                bucket=bucket,
+                key=key,
+                content=content,
+                uploaded_date=uploaded_date_str,
+                content_length=response.get("ContentLength"),
+                etag=response.get("ETag", "").strip('"')
+            )
         except Exception as e:
             raise Exception(
                 f"Failed to read file from S3 (bucket={bucket}, key={key}): {str(e)}"

@@ -74,6 +74,14 @@ def lambda_handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
         bucket = file_info["bucket"]
         key = file_info["key"]
 
+        # Skip directory objects (keys ending with '/')
+        if key.endswith('/'):
+            logger.info(f"Skipping directory object: s3://{bucket}/{key}")
+            return {
+                "statusCode": 200,
+                "body": json.dumps({"message": "Skipped directory object", "file": key}),
+            }
+
         logger.info(f"Processing file: s3://{bucket}/{key}")
 
         # Read file content from S3 (using pre-initialized client)

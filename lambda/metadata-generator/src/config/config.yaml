@@ -20,26 +20,7 @@ metadata_fields:
   tags:
     type: "STRING_LIST"
     description: "Relevant keywords and topics (3-5 tags)"
-  
-  author:
-    type: "STRING"
-    description: "Document author or creator"
-  
-  creation_date:
-    type: "STRING"
-    description: "Document creation date (YYYY-MM-DD format)"
-  
-  data_period:
-    type: "STRING"
-    description: "Time period covered by data (e.g., 2024Q1, January 2024)"
-  
-  record_count:
-    type: "NUMBER"
-    description: "Number of records in tabular data"
-  
-  is_active:
-    type: "BOOLEAN"
-    description: "Whether document is currently active/valid"
+
 
 # Path-based deterministic rules (highest priority)
 path_rules:
