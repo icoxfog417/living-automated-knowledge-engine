@@ -216,10 +216,10 @@ def test_build_prompt_output_format_instructions():
 
     prompt = PromptBuilder.build_metadata_prompt(file_info, schema)
 
-    # Should contain format instructions
-    assert "JSON format" in prompt
-    assert "Generation Rules" in prompt
-    assert "Output Format" in prompt
+    # Should contain analysis instructions
+    assert "Analyze the following file" in prompt
+    assert "Analysis Instructions" in prompt
+    assert "Generate metadata" in prompt
 
 
 def test_build_prompt_with_unicode_content():

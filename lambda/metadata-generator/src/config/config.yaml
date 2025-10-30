@@ -50,9 +50,12 @@ path_rules:
 
 # File type rules for content-based extraction
 file_type_rules:
-  - table_data:
+  table_data:
     - extensions: [".csv", ".xlsx"]
-    - use_columns_for_metadata: true
+      use_columns_for_metadata: true
+  text_files:
+    - extensions: [".txt", ".md", ".pdf"]
+      use_columns_for_metadata: false
   
 # Bedrock Configuration
 bedrock:
