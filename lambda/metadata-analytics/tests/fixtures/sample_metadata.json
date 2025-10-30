@@ -1,0 +1,8 @@
+{
+  "department": "Sales",
+  "document_type": "report",
+  "sensitivity_level": "internal",
+  "author": "Alice",
+  "creation_date": "2024-01-15",
+  "summary": "Q4 sales performance report"
+}

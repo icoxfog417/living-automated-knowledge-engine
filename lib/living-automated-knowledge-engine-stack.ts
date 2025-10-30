@@ -2,13 +2,14 @@ import * as cdk from "aws-cdk-lib";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import { Construct } from "constructs";
 import { LAKEAgent } from "./constructs/lake-agent";
+import { MetadataAnalyticsAgent } from "./constructs/metadata-analytics-agent";
 
 export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     // Read configuration from cdk.json
-    const lakeConfig = this.node.tryGetContext('lake') || {};
+    const lakeConfig = this.node.tryGetContext("lake") || {};
     const existingBucketName = lakeConfig.existingBucketName;
 
     let targetBucket: s3.IBucket;
@@ -16,7 +17,8 @@ export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
     if (existingBucketName) {
       // Use existing bucket
       targetBucket = s3.Bucket.fromBucketName(
-        this, "ExistingBucket", 
+        this,
+        "ExistingBucket",
         existingBucketName
       );
     } else {
@@ -31,10 +33,19 @@ export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
       });
     }
 
-    // Attach LAKE Agent to the bucket
+    // Attach LAKE Agent to the bucket (metadata generation)
     const lakeAgent = new LAKEAgent(this, "LAKEAgent", {
-      targetBucket
+      targetBucket,
     });
+
+    // Attach Metadata Analytics Agent to the bucket (daily analysis)
+    const analyticsAgent = new MetadataAnalyticsAgent(
+      this,
+      "MetadataAnalyticsAgent",
+      {
+        targetBucket,
+      }
+    );
 
     new cdk.CfnOutput(this, "LAKEAgentFunctionArn", {
       value: lakeAgent.lambdaFunction.functionArn,
@@ -44,6 +55,17 @@ export class LivingAutomatedKnowledgeEngineStack extends cdk.Stack {
     new cdk.CfnOutput(this, "LAKEAgentEventRuleArn", {
       value: lakeAgent.eventRule.ruleArn,
       description: "EventBridge Rule ARN for S3 object created events",
+    });
+
+    new cdk.CfnOutput(this, "MetadataAnalyticsFunctionArn", {
+      value: analyticsAgent.lambdaFunction.functionArn,
+      description: "Lambda function ARN for metadata analytics",
+    });
+
+    new cdk.CfnOutput(this, "MetadataAnalyticsScheduleArn", {
+      value: analyticsAgent.scheduledRule.ruleArn,
+      description:
+        "CloudWatch Events Rule ARN for scheduled metadata analytics",
     });
   }
 }
