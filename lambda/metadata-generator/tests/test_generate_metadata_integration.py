@@ -4,63 +4,50 @@ import json
 
 from src.clients.bedrock_client import BedrockClient
 from src.core.metadata_generator import MetadataGenerator
-from src.core.schema import Config, FileInfo, MetadataRule
+from src.core.schema import Config, FileInfo, MetadataField, PathRule, FileTypeRule
 from src.services.rule_matcher import RuleMatcher
 
 # テスト用の設定を直接定義
 TEST_CONFIG = Config(
-    rules=[
-        MetadataRule(
+    metadata_fields={
+        "department": MetadataField(type="STRING", description="department"),
+        "document_type": MetadataField(
+            type="STRING", 
+            options=["memo", "minutes", "manual", "others"],
+            description="document type"
+        ),
+        "sensitivity_level": MetadataField(
+            type="STRING",
+            options=["public", "internal", "confidential", "restricted"],
+            description="sensitivity level"
+        ),
+        "keywords": MetadataField(type="STRING", description="keywords (3-5 words)")
+    },
+    path_rules=[
+        PathRule(
             pattern="**/*.txt",
-            schema={
-                "type": "object",
-                "properties": {
-                    "department": {"type": "string", "description": "department"},
-                    "document_type": {
-                        "type": "string",
-                        "enum": ["memo", "minutes", "manual", "others"],
-                        "description": "document type",
-                    },
-                    "sensitivity_level": {
-                        "type": "string",
-                        "enum": ["public", "internal", "confidential", "restricted"],
-                        "description": "sensitivity level",
-                    },
-                    "keywords": {"type": "string", "description": "keywords (3-5 words)"},
-                },
-                "required": ["department", "document_type", "sensitivity_level", "keywords"],
-            },
+            extractions={
+                "document_type": "memo",
+                "sensitivity_level": "internal"
+            }
         ),
-        MetadataRule(
-            pattern="**/*.md",
-            schema={
-                "type": "object",
-                "properties": {
-                    "department": {"type": "string", "description": "department"},
-                    "document_type": {
-                        "type": "string",
-                        "enum": ["document", "README", "others"],
-                        "description": "document type",
-                    },
-                    "sensitivity_level": {
-                        "type": "string",
-                        "enum": ["public", "internal", "confidential", "restricted"],
-                        "description": "sensitivity level",
-                    },
-                    "keywords": {"type": "string", "description": "keywords (3-5 words)"},
-                    "summary": {
-                        "type": "string",
-                        "description": "document's summary (max 100 words)",
-                    },
-                },
-                "required": ["department", "document_type", "sensitivity_level", "keywords"],
-            },
-        ),
+        PathRule(
+            pattern="**/*.md", 
+            extractions={
+                "document_type": "document",
+                "sensitivity_level": "public"
+            }
+        )
     ],
-    bedrock_model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0",
-    bedrock_max_tokens=2000,
-    bedrock_input_context_window=200000,
-    bedrock_temperature=0.1,
+    file_type_rules={
+        "text_files": [
+            FileTypeRule(extensions=[".txt", ".md"], use_columns_for_metadata=False)
+        ]
+    },
+    bedrock_model_id="anthropic.claude-3-haiku-20240307-v1:0",
+    bedrock_max_tokens=1000,
+    bedrock_input_context_window=2000,
+    bedrock_temperature=0.1
 )
 
 
@@ -169,7 +156,7 @@ def test_metadata_generation_for_text_file():
     )
 
     # RuleMatcher初期化
-    rule_matcher = RuleMatcher(TEST_CONFIG.rules)
+    rule_matcher = RuleMatcher(TEST_CONFIG.path_rules)
 
     # メタデータ生成器初期化
     generator = MetadataGenerator(TEST_CONFIG, bedrock, rule_matcher)
@@ -202,7 +189,7 @@ def test_metadata_generation_for_markdown():
     )
 
     # RuleMatcher初期化
-    rule_matcher = RuleMatcher(TEST_CONFIG.rules)
+    rule_matcher = RuleMatcher(TEST_CONFIG.path_rules)
 
     generator = MetadataGenerator(TEST_CONFIG, bedrock, rule_matcher)
 
@@ -222,4 +209,3 @@ def test_metadata_generation_for_markdown():
     assert "document_type" in result.metadata, "Should have document_type field"
     assert "sensitivity_level" in result.metadata, "Should have sensitivity_level field"
     assert "keywords" in result.metadata, "Should have keywords field"
-    assert "summary" in result.metadata, "Should have summary field"

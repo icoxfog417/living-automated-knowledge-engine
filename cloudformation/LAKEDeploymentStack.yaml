@@ -1,0 +1,305 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Living Automated Knowledge Engine (LAKE) one-click deployment'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "LAKE Deployment Parameters"
+        Parameters:
+          - NotificationEmailAddress
+          - S3BucketName
+
+Parameters:
+  NotificationEmailAddress:
+    Type: String
+    Description: Email address to receive deployment notifications
+    AllowedPattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    ConstraintDescription: Must be a valid email address
+  
+  S3BucketName:
+    Type: String
+    Default: ""
+    Description: S3 bucket name for document storage (leave empty for auto-generated name)
+
+Resources:
+  # SNS Topic for deployment notifications
+  DeploymentNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: LAKE Deployment Notifications
+      TopicName: !Sub 'LAKE-Notification-${AWS::StackName}'
+      KmsMasterKeyId: 'alias/aws/sns'
+
+  # SNS Subscription for email notifications
+  DeploymentNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref DeploymentNotificationTopic
+      Endpoint: !Ref NotificationEmailAddress
+
+  # IAM Role for CodeBuild
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/AdministratorAccess"
+
+  # IAM Policy for CodeBuild
+  CodeBuildServiceRolePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: CodeBuildServiceRolePolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Effect: Allow
+            Resource:
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${LAKEDeploymentProject}:*"
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/codebuild/${LAKEDeploymentProject}"
+          - Action:
+              - sns:Publish
+            Effect: Allow
+            Resource: !Ref DeploymentNotificationTopic
+      Roles:
+        - !Ref CodeBuildServiceRole
+
+  # CodeBuild Project
+  LAKEDeploymentProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub 'LAKE-CodeBuild-${AWS::StackName}'
+      Description: 'Deploys Living Automated Knowledge Engine (LAKE)'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: NO_ARTIFACTS
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+        PrivilegedMode: false
+        EnvironmentVariables:
+          - Name: S3_BUCKET_NAME
+            Value: !Ref S3BucketName
+          - Name: SNS_TOPIC_ARN
+            Value: !Ref DeploymentNotificationTopic
+          - Name: STACK_NAME
+            Value: !Ref AWS::StackName
+      Source:
+        Type: NO_SOURCE
+        BuildSpec: |
+          version: 0.2
+
+          phases:
+            install:
+              runtime-versions:
+                nodejs: 22
+                python: 3.12
+              commands:
+                - echo "Starting LAKE deployment"
+                - aws sns publish --topic-arn ${SNS_TOPIC_ARN} --subject "LAKE Deployment Started" --message "Deployment of Living Automated Knowledge Engine has started. You will receive another notification when deployment is complete."
+                - git clone https://github.com/icoxfog417/living-automated-knowledge-engine.git
+                - cd living-automated-knowledge-engine
+
+            pre_build:
+              commands:
+                - cd $CODEBUILD_SRC_DIR/living-automated-knowledge-engine
+                - echo "Installing CDK dependencies"
+                - npm ci
+                - echo "Configuring LAKE parameters"
+                - |
+                  # Generate bucket name if not provided
+                  if [ -z "$S3_BUCKET_NAME" ]; then
+                    ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                    S3_BUCKET_NAME="lake-documents-${ACCOUNT_ID}-${AWS_DEFAULT_REGION}"
+                  fi
+                  
+                  # Create CDK context file
+                  cat > cdk.context.json << EOF
+                  {
+                    "lake": {
+                      "existingBucketName": "${S3_BUCKET_NAME}"
+                    }
+                  }
+                  EOF
+                  
+                  echo "CDK context configuration:"
+                  cat cdk.context.json
+
+            build:
+              commands:
+                - cd $CODEBUILD_SRC_DIR/living-automated-knowledge-engine
+                
+                # Check if bootstrap is needed
+                - |
+                  BOOTSTRAP_STACK_NAME="CDKToolkit"
+                  BOOTSTRAP_EXISTS=$(aws cloudformation describe-stacks --stack-name $BOOTSTRAP_STACK_NAME 2>&1 || echo "NOT_EXISTS")
+                  
+                  if [[ $BOOTSTRAP_EXISTS == *"Stack with id $BOOTSTRAP_STACK_NAME does not exist"* ]]; then
+                    echo "Running CDK bootstrap..."
+                    npx cdk bootstrap
+                  fi
+                
+                # Deploy the stack
+                - echo "Deploying LAKE with CDK"
+                - npx cdk deploy --all --require-approval never --force
+                
+                # Get deployment information
+                - cd $CODEBUILD_SRC_DIR/
+                - |
+                  LAKE_STACK_NAME="LivingAutomatedKnowledgeEngineStack"
+                  AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+                  
+                  # Get outputs from CDK stack
+                  LAKE_AGENT_FUNCTION=$(aws cloudformation describe-stacks --stack-name $LAKE_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='LAKEAgentFunctionArn'].OutputValue" --output text 2>/dev/null || echo "")
+                  ANALYTICS_FUNCTION=$(aws cloudformation describe-stacks --stack-name $LAKE_STACK_NAME --query "Stacks[0].Outputs[?OutputKey=='MetadataAnalyticsFunctionArn'].OutputValue" --output text 2>/dev/null || echo "")
+                  
+                  # Extract function names from ARNs
+                  LAKE_FUNCTION_NAME=$(echo $LAKE_AGENT_FUNCTION | cut -d':' -f7)
+                  ANALYTICS_FUNCTION_NAME=$(echo $ANALYTICS_FUNCTION | cut -d':' -f7)
+
+                  cat << EOF > deployment-info.txt
+                  LAKE (Living Automated Knowledge Engine) Deployment Completed Successfully!
+                  Deployment Time: $(date '+%Y-%m-%d %H:%M:%S')
+
+                  S3 Document Bucket: ${S3_BUCKET_NAME}
+                  LAKE Agent Function: ${LAKE_FUNCTION_NAME}
+                  Analytics Agent Function: ${ANALYTICS_FUNCTION_NAME}
+
+                  Important Next Steps:
+                  1. Enable model access on Amazon Bedrock:
+                     https://${AWS_ACCOUNT_ID}.${AWS_DEFAULT_REGION}.console.aws.amazon.com/bedrock/home?region=${AWS_DEFAULT_REGION}#/modelaccess
+                  
+                  2. Upload documents to the S3 bucket to trigger metadata generation:
+                     aws s3 cp your-document.pdf s3://${S3_BUCKET_NAME}/
+                  
+                  3. Monitor Lambda function logs for processing status:
+                     https://${AWS_ACCOUNT_ID}.${AWS_DEFAULT_REGION}.console.aws.amazon.com/lambda/home?region=${AWS_DEFAULT_REGION}#/functions/${LAKE_FUNCTION_NAME}
+
+                  Configuration:
+                  S3 Bucket: ${S3_BUCKET_NAME}
+
+                  Stack Details:
+                  Stack Name: ${LAKE_STACK_NAME}
+                  Region: ${AWS_DEFAULT_REGION}
+
+                  How to Use:
+                  - Upload any document to the S3 bucket
+                  - LAKE will automatically generate metadata using Bedrock
+                  - Metadata files will be stored as {filename}.metadata.json
+                  - Compatible with Amazon Bedrock Knowledge Bases
+
+                  EOF
+
+            post_build:
+              commands:
+                - cd $CODEBUILD_SRC_DIR/
+                - aws sns publish --topic-arn "${SNS_TOPIC_ARN}" --subject "LAKE Deployment Complete" --message file://deployment-info.txt
+                - echo "LAKE deployment completed successfully"
+                - rm -rf living-automated-knowledge-engine
+          artifacts:
+            files:
+              - deployment-info.txt
+      TimeoutInMinutes: 60
+
+  # Custom Resource to trigger CodeBuild
+  DeploymentTrigger:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt TriggerFunction.Arn
+      ProjectName: !Ref LAKEDeploymentProject
+      ServiceTimeout: 600
+
+  # Lambda function for the Custom Resource
+  TriggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt TriggerFunctionRole.Arn
+      Runtime: nodejs20.x
+      Timeout: 30
+      Code:
+        ZipFile: |
+          const { CodeBuildClient, StartBuildCommand } = require('@aws-sdk/client-codebuild');
+          const response = require('cfn-response');
+
+          exports.handler = async (event, context) => {
+            console.log('Event:', JSON.stringify(event, null, 2));
+            
+            const physicalResourceId = `LAKECodeBuildTrigger-${event.ResourceProperties.ProjectName}`;
+            const responseData = {};
+            
+            try {
+              const codebuild = new CodeBuildClient({ 
+                region: process.env.AWS_REGION,
+                maxAttempts: 3
+              });
+
+              if (event.RequestType === 'Create' || event.RequestType === 'Update') {
+                const command = new StartBuildCommand({ 
+                  projectName: event.ResourceProperties.ProjectName 
+                });
+                const result = await codebuild.send(command);
+                responseData.BuildId = result.build.id;
+              }
+              
+              await response.send(event, context, response.SUCCESS, responseData, physicalResourceId);
+            } catch (error) {
+              console.error('Error:', error);
+              await response.send(event, context, response.FAILED, { Error: error.message }, physicalResourceId);
+            }
+          };
+
+  # IAM Role for Lambda Trigger Function
+  TriggerFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+        - PolicyName: CodeBuildStartPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: codebuild:StartBuild
+                Resource: !GetAtt LAKEDeploymentProject.Arn
+
+Outputs:
+  NotificationTopicArn:
+    Description: ARN of the SNS topic for deployment notifications
+    Value: !Ref DeploymentNotificationTopic
+  
+  CodeBuildProjectName:
+    Description: Name of the CodeBuild project
+    Value: !Ref LAKEDeploymentProject
+  
+  CodeBuildLogGroup:
+    Description: CloudWatch Logs group for CodeBuild logs
+    Value: !Sub '/aws/codebuild/${LAKEDeploymentProject}'
+  
+  DeploymentStatus:
+    Description: Deployment status information
+    Value: !Sub "LAKE deployment has been initiated. You will receive an email notification at ${NotificationEmailAddress} when the deployment is complete."

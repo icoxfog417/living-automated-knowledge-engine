@@ -72,7 +72,7 @@ export class LAKEAgent extends Construct {
         -8
       )}`,
       description:
-        "Trigger Lambda when objects are uploaded to S3 (excluding .metadata.json files)",
+        "Trigger Lambda when objects are uploaded to S3 (excluding .metadata.json files and directories)",
       eventPattern: {
         source: ["aws.s3"],
         detailType: ["Object Created"],
@@ -83,9 +83,7 @@ export class LAKEAgent extends Construct {
           object: {
             key: [
               {
-                "anything-but": {
-                  suffix: ".metadata.json",
-                },
+                "anything-but": { suffix: ".metadata.json" },
               },
             ],
           },

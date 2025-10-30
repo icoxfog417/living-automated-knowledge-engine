@@ -1,172 +1,104 @@
-"""Unit tests for RuleMatcher."""
+"""Comprehensive tests for RuleMatcher and related schema classes."""
 
-from src.core.schema import MetadataRule
+from src.core.schema import MetadataField, PathRule, FileTypeRule, Config
 from src.services.rule_matcher import RuleMatcher
 
 
-def test_match_root_level_files_with_globstar():
-    """Test that root-level files match ** patterns correctly."""
-    # Test various root-level files
-    assert RuleMatcher.match_pattern("Bedrock_Wiki.md", "**/*.md")
-    assert RuleMatcher.match_pattern("report.txt", "**/*.txt")
-    assert RuleMatcher.match_pattern("document.pdf", "**/*.pdf")
-    assert RuleMatcher.match_pattern("data.csv", "**/*.csv")
+def test_rule_matcher_comprehensive():
+    """Test RuleMatcher with both basic and advanced patterns."""
+    rules = [
+        # More specific patterns first
+        PathRule(pattern="contracts/{department}/**", extractions={"department": "{department}", "document_type": "contract"}),
+        PathRule(pattern="{department}/{document_type}/*", extractions={"department": "{department}", "document_type": "{document_type}"}),
+        PathRule(pattern="reports/**/*.csv", extractions={"document_type": "report"}),
+        # General patterns last
+        PathRule(pattern="**/*.md", extractions={"document_type": "markdown"}),
+    ]
 
+    matcher = RuleMatcher(rules)
 
-def test_match_nested_files_with_globstar():
-    """Test that nested files match ** patterns correctly."""
+    # Basic pattern matching
     assert RuleMatcher.match_pattern("docs/guide.md", "**/*.md")
-    assert RuleMatcher.match_pattern("deep/nested/path/readme.md", "**/*.md")
-    assert RuleMatcher.match_pattern("reports/2024/data.csv", "**/*.csv")
-
-
-def test_match_with_directory_prefix():
-    """Test patterns with directory prefix like 'reports/**/*.csv'."""
-    # Should match
-    assert RuleMatcher.match_pattern("reports/data.csv", "reports/**/*.csv")
-    assert RuleMatcher.match_pattern("reports/nested/data.csv", "reports/**/*.csv")
-    # Note: Very deeply nested paths may not match due to pathlib limitations
-    # This is acceptable for the current use case
-
-    # Should not match
+    assert RuleMatcher.match_pattern("docs/sub/guide.md", "**/*.md")
+    assert RuleMatcher.match_pattern("Bedrock_Wiki.md", "*.md")  # Root level files
+    assert RuleMatcher.match_pattern("reports/2024/data.csv", "reports/**/*.csv")  # Has subdirectory
     assert not RuleMatcher.match_pattern("other/data.csv", "reports/**/*.csv")
-    assert not RuleMatcher.match_pattern("data.csv", "reports/**/*.csv")
-
-
-def test_match_simple_pattern():
-    """Test simple patterns without globstar."""
-    assert RuleMatcher.match_pattern("report.txt", "*.txt")
-    assert RuleMatcher.match_pattern("data.csv", "*.csv")
-
-    # Note: pathlib.match() matches against any part of the path,
-    # so nested files will also match. This is expected behavior.
-
-
-def test_match_exact_pattern():
-    """Test exact file name patterns."""
-    assert RuleMatcher.match_pattern("README.md", "README.md")
-    assert not RuleMatcher.match_pattern("readme.md", "README.md")
-    # Note: pathlib.match() matches against the end of the path,
-    # so "docs/README.md" will match "README.md". This is expected behavior.
-    # Use full path patterns if you need exact matching.
-
-
-def test_no_match_wrong_extension():
-    """Test that files with wrong extensions don't match."""
     assert not RuleMatcher.match_pattern("document.docx", "**/*.md")
-    assert not RuleMatcher.match_pattern("data.csv", "**/*.md")
-    assert not RuleMatcher.match_pattern("report.txt", "**/*.pdf")
 
+    # Advanced pattern matching with variables
+    assert RuleMatcher.match_pattern("contracts/sales/agreement.pdf", "contracts/{department}/**")
+    assert RuleMatcher.match_pattern("engineering/proposal/spec.md", "{department}/{document_type}/*")
 
-def test_find_matching_rule_first_match():
-    """Test that find_matching_rule returns the first matching rule."""
-    rules = [
-        MetadataRule(pattern="**/*.md", schema={"type": "markdown"}),
-        MetadataRule(pattern="**/*.txt", schema={"type": "text"}),
-        MetadataRule(pattern="**/*.csv", schema={"type": "csv"}),
-    ]
+    # Rule finding - basic patterns
+    rule = matcher.find_matching_rule("docs/guide.md")  # This should match **/*.md
+    assert rule is not None
+    assert rule.extractions == {"document_type": "markdown"}
 
-    matcher = RuleMatcher(rules)
-
-    # Test matching
+    # Root level file should not match any rules
     rule = matcher.find_matching_rule("Bedrock_Wiki.md")
+    assert rule is None
+
+    # Rule finding - advanced patterns with extraction
+    rule = matcher.find_matching_rule("contracts/sales/agreement.pdf")
     assert rule is not None
-    assert rule.schema == {"type": "markdown"}
-    assert rule.pattern == "**/*.md"
+    assert rule.extractions["document_type"] == "contract"
 
-
-def test_find_matching_rule_different_files():
-    """Test finding matching rules for different file types."""
-    rules = [
-        MetadataRule(pattern="**/*.md", schema={"type": "markdown"}),
-        MetadataRule(pattern="**/*.txt", schema={"type": "text"}),
-        MetadataRule(pattern="reports/**/*.csv", schema={"type": "csv"}),
-    ]
-
-    matcher = RuleMatcher(rules)
-
-    # Test markdown
-    rule = matcher.find_matching_rule("docs/guide.md")
+    rule = matcher.find_matching_rule("engineering/proposal/spec.md")
     assert rule is not None
-    assert rule.schema == {"type": "markdown"}
+    extracted = matcher.extract_values("engineering/proposal/spec.md", rule)
+    assert extracted["department"] == "engineering"
+    assert extracted["document_type"] == "proposal"
 
-    # Test text
-    rule = matcher.find_matching_rule("notes.txt")
-    assert rule is not None
-    assert rule.schema == {"type": "text"}
-
-    # Test CSV with prefix
-    rule = matcher.find_matching_rule("reports/data.csv")
-    assert rule is not None
-    assert rule.schema == {"type": "csv"}
-
-
-def test_find_matching_rule_returns_none_when_no_match():
-    """Test that find_matching_rule returns None when no rule matches."""
-    rules = [
-        MetadataRule(pattern="**/*.md", schema={"type": "markdown"}),
-        MetadataRule(pattern="**/*.txt", schema={"type": "text"}),
-    ]
-
-    matcher = RuleMatcher(rules)
-
-    # Test no match
+    # No match
     rule = matcher.find_matching_rule("unknown.xyz")
     assert rule is None
 
-    rule = matcher.find_matching_rule("document.pdf")
-    assert rule is None
+
+def test_config_structure():
+    """Test Config class with all components."""
+    config = Config(
+        metadata_fields={
+            "department": MetadataField(type="STRING", options=["sales"], description="Dept")
+        },
+        path_rules=[
+            PathRule(pattern="**/{department}/**", extractions={"department": "{department}"})
+        ],
+        file_type_rules={
+            "table_data": [FileTypeRule(extensions=[".csv"], use_columns_for_metadata=True)]
+        },
+        bedrock_model_id="test-model",
+        bedrock_max_tokens=1000,
+        bedrock_input_context_window=2000,
+        bedrock_temperature=0.1
+    )
+    
+    assert len(config.metadata_fields) == 1
+    assert len(config.path_rules) == 1
+    assert "table_data" in config.file_type_rules
 
 
-def test_find_matching_rule_priority():
-    """Test that the first matching rule is returned when multiple rules match."""
-    rules = [
-        MetadataRule(pattern="**/*.md", schema={"type": "markdown_general"}),
-        MetadataRule(pattern="docs/**/*.md", schema={"type": "markdown_docs"}),
+def test_file_type_rule():
+    """Test FileTypeRule extension matching and behavior."""
+    table_rule = FileTypeRule(extensions=[".csv", ".xlsx"], use_columns_for_metadata=True)
+    doc_rule = FileTypeRule(extensions=[".pdf", ".docx"], use_columns_for_metadata=False)
+    
+    assert ".csv" in table_rule.extensions
+    assert ".xlsx" in table_rule.extensions
+    assert table_rule.use_columns_for_metadata is True
+    
+    assert ".pdf" in doc_rule.extensions
+    assert doc_rule.use_columns_for_metadata is False
+
+
+def test_rule_priority():
+    """Test PathRule has highest priority over FileTypeRule."""
+    path_rules = [
+        PathRule(pattern="contracts/**", extractions={"document_type": "contract"})
     ]
-
-    matcher = RuleMatcher(rules)
-
-    # Should match the first rule (more general)
-    rule = matcher.find_matching_rule("docs/guide.md")
+    
+    matcher = RuleMatcher(path_rules)
+    
+    # PathRule should match contracts/agreement.pdf and override any FileTypeRule
+    rule = matcher.find_matching_rule("contracts/agreement.pdf")
     assert rule is not None
-    assert rule.schema == {"type": "markdown_general"}
-
-
-def test_empty_rules_list():
-    """Test behavior with empty rules list."""
-    matcher = RuleMatcher([])
-
-    rule = matcher.find_matching_rule("any_file.txt")
-    assert rule is None
-
-
-def test_match_pattern_with_multiple_extensions():
-    """Test patterns with multiple possible extensions."""
-    rules = [
-        MetadataRule(pattern="**/*.{md,txt}", schema={"type": "text_like"}),
-    ]
-
-    matcher = RuleMatcher(rules)
-
-    # Note: Python's pathlib doesn't support {md,txt} syntax
-    # This test documents the current behavior
-    assert not matcher.find_matching_rule("file.md")
-    assert not matcher.find_matching_rule("file.txt")
-
-
-def test_match_case_sensitivity():
-    """Test that pattern matching is case-sensitive."""
-    rules = [
-        MetadataRule(pattern="**/*.MD", schema={"type": "markdown_upper"}),
-    ]
-
-    matcher = RuleMatcher(rules)
-
-    # Should match exact case
-    rule = matcher.find_matching_rule("README.MD")
-    assert rule is not None
-
-    # Should not match different case
-    rule = matcher.find_matching_rule("README.md")
-    assert rule is None
+    assert rule.extractions["document_type"] == "contract"

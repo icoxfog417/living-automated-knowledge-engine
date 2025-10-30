@@ -2,8 +2,6 @@
 
 import json
 
-from jsonschema import ValidationError, validate
-
 from ..clients.bedrock_client import BedrockClient
 from ..services.prompt_builder import PromptBuilder
 from ..services.rule_matcher import RuleMatcher
@@ -18,7 +16,7 @@ class MetadataGenerator:
         Initialize metadata generator.
 
         Args:
-            config: Configuration with rules and settings
+            config: Configuration with metadata fields and rules
             bedrock_client: Bedrock client for AI generation
             rule_matcher: Rule matcher for finding matching rules
         """
@@ -35,54 +33,75 @@ class MetadataGenerator:
 
         Returns:
             Generated metadata
-
-        Raises:
-            ValueError: If no matching rule found or generation fails
         """
-        # Find matching rule (delegated to RuleMatcher)
+        # Find matching path rule (optional)
         rule = self.rule_matcher.find_matching_rule(file_info.key)
-        if not rule:
-            raise ValueError(f"No matching rule found for file: {file_info.key}")
+        path_metadata = {}
+        
+        if rule:
+            # Extract path-based metadata (highest priority)
+            path_metadata = self.rule_matcher.extract_values(file_info.key, rule)
+
+        # Build JSON schema from metadata fields for AI generation
+        json_schema = self._build_json_schema()
 
         # Calculate max content characters based on input context window
         max_content_chars = PromptBuilder.calculate_max_content_chars(
             input_context_window=self.config.bedrock_input_context_window
         )
 
-        # Build prompt from JSON Schema (delegated to PromptBuilder)
+        # Build prompt for AI generation
         prompt = PromptBuilder.build_metadata_prompt(
-            file_info, rule.schema, max_content_chars=max_content_chars
+            file_info, json_schema, max_content_chars=max_content_chars
         )
 
-        # Generate metadata using Bedrock with structured output
-        raw_metadata = self.bedrock_client.generate_metadata(prompt, json_schema=rule.schema)
+        # Generate metadata using Bedrock
+        ai_metadata = self.bedrock_client.generate_metadata(prompt, json_schema=json_schema)
 
-        # Validate against JSON Schema
-        validated_metadata = self._validate_metadata(raw_metadata, rule.schema)
+        # Add S3 upload date if available
+        s3_metadata = {}
+        if file_info.uploaded_date:
+            s3_metadata["uploaded_date"] = file_info.uploaded_date
 
-        return GeneratedMetadata(metadata=validated_metadata, file_key=file_info.key)
+        # Merge metadata: path-based > S3 metadata > AI-generated
+        final_metadata = {**ai_metadata, **s3_metadata, **path_metadata}
 
-    def _validate_metadata(self, metadata: dict, schema: dict) -> dict:
+        return GeneratedMetadata(metadata=final_metadata, file_key=file_info.key)
+
+    def _build_json_schema(self) -> dict:
         """
-        Validate generated metadata against JSON Schema.
-
-        Args:
-            metadata: Generated metadata dictionary
-            schema: JSON Schema to validate against
+        Build JSON schema from metadata fields configuration.
 
         Returns:
-            Validated metadata (same as input if valid)
-
-        Raises:
-            ValueError: If metadata doesn't match schema
+            JSON schema for metadata validation
         """
-        try:
-            validate(instance=metadata, schema=schema)
-            return metadata
-        except ValidationError as e:
-            # Provide detailed error message
-            error_path = " -> ".join(str(p) for p in e.path) if e.path else "root"
-            raise ValueError(
-                f"Generated metadata validation failed at '{error_path}': {e.message}\n"
-                f"Generated metadata: {json.dumps(metadata, ensure_ascii=False, indent=2)}"
-            ) from e
+        properties = {}
+        required = []
+
+        for field_name, field_def in self.config.metadata_fields.items():
+            prop = {
+                "type": self._convert_field_type(field_def.type),
+                "description": field_def.description
+            }
+            
+            if field_def.options:
+                prop["enum"] = field_def.options
+            
+            properties[field_name] = prop
+            required.append(field_name)
+
+        return {
+            "type": "object",
+            "properties": properties,
+            "required": required
+        }
+
+    def _convert_field_type(self, field_type: str) -> str:
+        """Convert metadata field type to JSON schema type."""
+        type_mapping = {
+            "STRING": "string",
+            "STRING_LIST": "array",
+            "NUMBER": "number",
+            "BOOLEAN": "boolean"
+        }
+        return type_mapping.get(field_type, "string")
