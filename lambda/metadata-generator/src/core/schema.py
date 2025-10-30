@@ -25,18 +25,37 @@ class FileInfo:
 
 
 @dataclass
-class MetadataRule:
-    """A rule for generating metadata based on file patterns."""
+class MetadataField:
+    """Definition of a metadata field."""
+    
+    type: str  # "STRING", "STRING_LIST", "NUMBER", "BOOLEAN"
+    description: str
+    options: list[str] | None = None
 
+
+@dataclass
+class PathRule:
+    """Rule for extracting metadata from file paths."""
+    
     pattern: str
-    schema: dict[str, Any]
+    extractions: dict[str, str]
+
+
+@dataclass
+class FileTypeRule:
+    """Rule for metadata extraction based on file type."""
+    
+    extensions: list[str] | None = None
+    use_columns_for_metadata: bool | None = None
 
 
 @dataclass
 class Config:
     """Application configuration."""
 
-    rules: list[MetadataRule]
+    metadata_fields: dict[str, MetadataField]
+    path_rules: list[PathRule]
+    file_type_rules: dict[str, list[FileTypeRule]]
     bedrock_model_id: str
     bedrock_max_tokens: int
     bedrock_input_context_window: int

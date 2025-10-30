@@ -1,132 +1,59 @@
-# Metadata Generation Rules Configuration
+# Metadata Schema Configuration
 
-rules:
-  file_patterns:
-    # PDF documents
-    - pattern: "**/*.pdf"
-      schema:
-        type: "object"
-        properties:
-          department:
-            type: "string"
-            description: "Department name (e.g., Sales, Engineering, HR)"
-          document_type:
-            type: "string"
-            enum: ["contract", "report", "proposal", "manual", "others"]
-            description: "Type of document"
-          sensitivity_level:
-            type: "string"
-            enum: ["public", "internal", "confidential", "restricted"]
-            description: "Sensitivity level"
-          author:
-            type: "string"
-            description: "Author name"
-          creation_date:
-            type: "string"
-            format: "date"
-            description: "Creation date (YYYY-MM-DD format)"
-          summary:
-            type: "string"
-            description: "Document summary (max 100 words)"
-        required: ["department", "document_type", "sensitivity_level"]
+# Define metadata fields that can be extracted
+metadata_fields:
+  department:
+    type: "STRING"
+    options: ["sales", "engineering", "hr", "finance", "marketing", "operations"]
+    description: "Department that owns or created the document"
+  
+  document_type:
+    type: "STRING"
+    options: ["minutes", "report", "proposal", "contract", "manual", "memo", "others"]
+    description: "Category of document"
+  
+  sensitivity_level:
+    type: "STRING"
+    options: ["public", "internal", "confidential", "restricted"]
+    description: "Data sensitivity classification"
+  
+  tags:
+    type: "STRING_LIST"
+    description: "Relevant keywords and topics (3-5 tags)"
+  
+  author:
+    type: "STRING"
+    description: "Document author or creator"
+  
+  creation_date:
+    type: "STRING"
+    description: "Document creation date (YYYY-MM-DD format)"
+  
+  data_period:
+    type: "STRING"
+    description: "Time period covered by data (e.g., 2024Q1, January 2024)"
+  
+  record_count:
+    type: "NUMBER"
+    description: "Number of records in tabular data"
+  
+  is_active:
+    type: "BOOLEAN"
+    description: "Whether document is currently active/valid"
 
-    # CSV/Excel files in reports directory
-    - pattern: "reports/**/*.csv"
-      schema:
-        type: "object"
-        properties:
-          department:
-            type: "string"
-            description: "Department name"
-          document_type:
-            type: "string"
-            const: "tabular_data"
-          sensitivity_level:
-            type: "string"
-            enum: ["public", "internal", "confidential", "restricted"]
-            description: "Sensitivity level"
-          data_period:
-            type: "string"
-            description: "Data period (e.g., January 2024, 2024Q1)"
-          columns_summary:
-            type: "string"
-            description: "Summary of main columns"
-          record_count:
-            type: "integer"
-            description: "Approximate number of records"
-        required:
-          ["department", "document_type", "sensitivity_level", "data_period"]
+# Path-based deterministic rules (highest priority)
+path_rules:
+  - pattern: "{department}/{document_type}/**"
+    extractions:
+      department: "{department}"
+      document_type: "{document_type}"
 
-    - pattern: "reports/**/*.xlsx"
-      schema:
-        type: "object"
-        properties:
-          department:
-            type: "string"
-            description: "Department name"
-          document_type:
-            type: "string"
-            const: "tabular_data"
-          sensitivity_level:
-            type: "string"
-            enum: ["public", "internal", "confidential", "restricted"]
-            description: "Sensitivity level"
-          data_period:
-            type: "string"
-            description: "Data period (e.g., January 2024, 2024Q1)"
-          columns_summary:
-            type: "string"
-            description: "Summary of main columns"
-        required:
-          ["department", "document_type", "sensitivity_level", "data_period"]
-
-    # Text files
-    - pattern: "**/*.txt"
-      schema:
-        type: "object"
-        properties:
-          department:
-            type: "string"
-            description: "Department name"
-          document_type:
-            type: "string"
-            enum: ["memo", "minutes", "manual", "others"]
-            description: "Type of document"
-          sensitivity_level:
-            type: "string"
-            enum: ["public", "internal", "confidential", "restricted"]
-            description: "Sensitivity level"
-          keywords:
-            type: "string"
-            description: "Main keywords of the document (3-5 words, comma-separated)"
-        required:
-          ["department", "document_type", "sensitivity_level", "keywords"]
-
-    # Markdown files
-    - pattern: "**/*.md"
-      schema:
-        type: "object"
-        properties:
-          department:
-            type: "string"
-            description: "Department name"
-          document_type:
-            type: "string"
-            enum: ["document", "manual", "README", "others"]
-            description: "Type of document"
-          sensitivity_level:
-            type: "string"
-            enum: ["public", "internal", "confidential", "restricted"]
-            description: "Sensitivity level"
-          keywords:
-            type: "string"
-            description: "Main keywords of the document (3-5 words, comma-separated)"
-          summary:
-            type: "string"
-            description: "Document summary (max 100 words)"
-        required:
-          ["department", "document_type", "sensitivity_level", "keywords"]
-
+# File type rules for content-based extraction
+file_type_rules:
+  - table_data:
+    - extensions: [".csv", ".xlsx"]
+    - use_columns_for_metadata: true
+  
 # Bedrock Configuration
 bedrock:
   model_id: "global.anthropic.claude-haiku-4-5-20251001-v1:0"

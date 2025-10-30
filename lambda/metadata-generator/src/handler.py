@@ -24,7 +24,14 @@ try:
         "bedrock_model_id": config.bedrock_model_id,
         "bedrock_max_tokens": config.bedrock_max_tokens,
         "bedrock_temperature": config.bedrock_temperature,
-        "rules": [{"pattern": rule.pattern, "schema": rule.schema} for rule in config.rules],
+        "metadata_fields": {name: {"type": field.type, "description": field.description} 
+                          for name, field in config.metadata_fields.items()},
+        "path_rules": [{"pattern": rule.pattern, "extractions": rule.extractions} 
+                      for rule in config.path_rules],
+        "file_type_rules": {category: [{"extensions": rule.extensions, 
+                                       "use_columns_for_metadata": rule.use_columns_for_metadata}
+                                      for rule in rules] 
+                           for category, rules in config.file_type_rules.items()}
     }
     logger.info(f"Loaded configuration: {json.dumps(config_dict, ensure_ascii=False, indent=2)}")
 
@@ -35,7 +42,7 @@ try:
         max_tokens=config.bedrock_max_tokens,
         temperature=config.bedrock_temperature,
     )
-    rule_matcher = RuleMatcher(config.rules)
+    rule_matcher = RuleMatcher(config.path_rules)
     generator = MetadataGenerator(config, bedrock_client, rule_matcher)
 
 except Exception as e:

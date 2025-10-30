@@ -91,8 +91,7 @@ class PromptBuilder:
         if len(file_info.content) > max_content_chars:
             content_preview += "\n... (truncated)"
 
-        return f"""Please generate metadata for the following file according to the \
-specified JSON Schema.
+        return f"""Analyze the following file and generate appropriate metadata based on its content, filename, and path.
 
 ## File Information
 - File name: {file_info.file_name}
@@ -101,25 +100,14 @@ specified JSON Schema.
 ## File Content
 {content_preview}
 
-## Metadata Field Definitions
+## Metadata Field Guidelines
 {chr(10).join(field_descriptions)}
 
-## Generation Rules
-1. All [Required] fields must be included
-2. If enum or const (fixed value) is specified, use those values
-3. Infer appropriate values from the file content
-4. For Japanese files, generate values in English
-5. If values are unknown, infer them from the file name or path
+## Analysis Instructions
+1. Analyze the file content to understand its purpose and context
+2. Use the file path and name as additional context clues
+3. For Japanese content, provide metadata values in English
+4. If specific values cannot be determined from content, make reasonable inferences from the filename or path
+5. Ensure all required fields are populated with appropriate values
 
-## Output Format
-Output in valid JSON format. No explanatory text or additional text is needed.
-
-Example:
-```json
-{{
-  "field1": "value1",
-  "field2": "value2"
-}}
-```
-
-Please output in JSON format:"""
+Generate metadata that accurately reflects the file's content and purpose."""
